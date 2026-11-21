@@ -122,7 +122,6 @@ $shortcode = $form_id > 0 ? '[event_cost_calculator id="' . esc_attr( $form_id )
 		<!-- TAB 1: Sections & Questions Builder -->
 		<div class="rhw-tab-pane active" id="tab-questions">
 			<div class="rhw-builder-layout">
-				<!-- Left Column: Sections & Questions Tree -->
 				<div class="rhw-builder-main">
 					<div class="rhw-action-row">
 						<div>
@@ -177,7 +176,7 @@ $shortcode = $form_id > 0 ? '[event_cost_calculator id="' . esc_attr( $form_id )
 					<tr>
 						<th scope="row"><label for="rhw_pricing_estimate_label"><?php esc_html_e( 'Estimate Grand Total Label', 'rhw-calculator' ); ?></label></th>
 						<td>
-							<input type="text" id="rhw_pricing_estimate_label" class="regular-text" value="<?php echo esc_attr( isset( $form['pricing_settings']['estimate_label'] ) ? $form['pricing_settings']['estimate_label'] : 'Estimated Investment' ); ?>">
+							<input type="text" id="rhw_pricing_estimate_label" class="regular-text" value="<?php echo esc_attr( isset( $form['pricing_settings']['estimate_label'] ) && 'Estimated Investment' !== $form['pricing_settings']['estimate_label'] ? $form['pricing_settings']['estimate_label'] : 'Estimated Cost' ); ?>">
 						</td>
 					</tr>
 					<tr>

@@ -111,7 +111,8 @@ class RHW_Form_Manager {
 	}
 
 	/**
-	 * Returns full default Rose Hall Weddings form configuration seeded with Google Form questions & Proposal pricing.
+	 * Returns full default Rose Hall Weddings form configuration seeded with Google Form questions,
+	 * Weekday/Weekend venue pricing, file uploads, and line items.
 	 */
 	public function get_default_rose_hall_form_data() {
 		return array(
@@ -119,7 +120,7 @@ class RHW_Form_Manager {
 				array(
 					'id'          => 'sec_event',
 					'title'       => 'Event & Venue Details',
-					'description' => 'Tell us about your envisioned celebration date, guest count, and preferred venue.',
+					'description' => 'Select your preferred date, guest count, and exquisite Rose Hall venue.',
 					'icon'        => 'calendar',
 				),
 				array(
@@ -131,7 +132,7 @@ class RHW_Form_Manager {
 				array(
 					'id'          => 'sec_decor_rentals',
 					'title'       => 'Décor, Rentals & Flowers',
-					'description' => 'Design your setting with our signature chairs, linens, tableware, and floral packages.',
+					'description' => 'Select ceremony chairs, dining linens, tableware, and upload your design inspiration.',
 					'icon'        => 'heart',
 				),
 				array(
@@ -158,9 +159,9 @@ class RHW_Form_Manager {
 				'currency_position'     => 'before',
 				'tax_rate'              => 15.0, // 15% Government Tax from quote
 				'service_charge_rate'   => 20.0, // 20% Service Charge on F&B from quote
-				'estimate_label'        => 'Estimated Investment',
-				'disclaimer_text'       => 'Please note: This amount is an estimated preliminary guide based on the information provided and standard 2026/2027 package rates. Items marked "Let\'s discuss" (such as bespoke flowers, tenting, specialized catering, and transport) are finalized during consultation with our Destination Relationship Specialists. Prices are subject to change.',
-				'deposit_percentage'    => 25.0,
+				'estimate_label'        => 'Estimated Cost',
+				'disclaimer_text'       => 'Please note: This amount is an estimated preliminary guide based on selected options and standard venue rates. A 50% deposit will be required to secure your preferred venue. Bespoke elements (custom floral designs, tenting, specialized catering, and transport) are finalized during consultation with our Destination Relationship Specialists. All rates attract government taxes. Prices are subject to change without prior notice.',
+				'deposit_percentage'    => 50.0, // 50% deposit required as stated on venue sheet
 			),
 			'notification_settings' => array(
 				'recipient_emails'      => get_option( 'admin_email' ) . ', weddings@rosehall.com',
@@ -182,13 +183,20 @@ class RHW_Form_Manager {
 			'questions'             => array(
 				// SECTION 1: Event & Venue Details
 				array(
-					'id'          => 'event_date',
-					'section_id'  => 'sec_event',
-					'label'       => 'Preferred Date and Time of Wedding / Event',
-					'help_text'   => 'Please confirm your preferred date and time.',
-					'type'        => 'text',
-					'required'    => true,
-					'placeholder' => 'e.g. October 30, 2027 at 4:00 PM',
+					'id'         => 'event_date',
+					'section_id' => 'sec_event',
+					'label'      => 'Preferred Date of Wedding / Event',
+					'help_text'  => 'Select your preferred date. Venue rental rates depend on whether your date falls on a Weekday (Monday–Thursday) or Weekend / Holiday (Friday–Sunday).',
+					'type'       => 'date',
+					'required'   => true,
+				),
+				array(
+					'id'         => 'event_time',
+					'section_id' => 'sec_event',
+					'label'      => 'Preferred Time of Ceremony / Event',
+					'help_text'  => 'Suggested ceremony times: 3:30 PM, 4:00 PM, or 4:30 PM for sunset photos.',
+					'type'       => 'time',
+					'required'   => true,
 				),
 				array(
 					'id'             => 'guest_count',
@@ -203,12 +211,13 @@ class RHW_Form_Manager {
 					'max'            => 1000,
 				),
 				array(
-					'id'         => 'event_type',
-					'section_id' => 'sec_event',
-					'label'      => 'Event Type',
-					'type'       => 'radio',
-					'required'   => true,
-					'options'    => array(
+					'id'             => 'event_type',
+					'section_id'     => 'sec_event',
+					'label'          => 'Event Type',
+					'type'           => 'radio',
+					'required'       => true,
+					'has_other_text' => true,
+					'options'        => array(
 						array( 'label' => 'Wedding (ceremony, cocktail & reception)', 'value' => 'wedding' ),
 						array( 'label' => 'Dinner / Gala', 'value' => 'dinner_gala' ),
 						array( 'label' => 'Party / Celebration', 'value' => 'party' ),
@@ -219,12 +228,13 @@ class RHW_Form_Manager {
 					),
 				),
 				array(
-					'id'         => 'service_type',
-					'section_id' => 'sec_event',
-					'label'      => 'What type of service do you require from Rose Hall Weddings?',
-					'type'       => 'radio',
-					'required'   => true,
-					'options'    => array(
+					'id'             => 'service_type',
+					'section_id'     => 'sec_event',
+					'label'          => 'What type of service do you require from Rose Hall Weddings?',
+					'type'           => 'radio',
+					'required'       => true,
+					'has_other_text' => true,
+					'options'        => array(
 						array(
 							'label' => 'Full service (includes venue, catering, decor, photography, entertainment & transportation)',
 							'value' => 'full_service',
@@ -247,50 +257,93 @@ class RHW_Form_Manager {
 					'id'          => 'venue_selection',
 					'section_id'  => 'sec_event',
 					'label'       => 'Which Rose Hall venue or venues are you most interested in?',
-					'help_text'   => 'Note: Ceremony-only venues are not able to host the reception.',
+					'help_text'   => 'Pricing reflects official rate sheets and adjusts dynamically based on Weekdays vs. Weekends / Holidays. *Ceremony-only venues cannot host receptions.',
 					'type'        => 'radio',
 					'required'    => true,
 					'category'    => 'Venue Rental',
 					'options'     => array(
 						array(
-							'label'   => 'White Witch Golf Course ($5,000.00)',
-							'value'   => 'white_witch_golf_course',
-							'pricing' => array( 'type' => 'fixed', 'amount' => 5000.00, 'category' => 'Venue Rental' ),
-						),
-						array(
-							'label'   => 'Rose Hall Great House ($5,500.00)',
+							'label'   => 'Rose Hall Great House (Weekdays $3,000 | Weekends $3,500)',
 							'value'   => 'rose_hall_great_house',
-							'pricing' => array( 'type' => 'fixed', 'amount' => 5500.00, 'category' => 'Venue Rental' ),
+							'pricing' => array(
+								'type'           => 'venue',
+								'is_venue'       => true,
+								'weekday_amount' => 3000.00,
+								'weekend_amount' => 3500.00,
+								'amount'         => 3500.00,
+								'category'       => 'Venue Rental',
+							),
 						),
 						array(
-							'label'   => 'Cinnamon Hill Great House ($4,500.00)',
+							'label'   => 'White Witch Golf Club (Weekdays $3,000 | Weekends $3,500)',
+							'value'   => 'white_witch_golf_club',
+							'pricing' => array(
+								'type'           => 'venue',
+								'is_venue'       => true,
+								'weekday_amount' => 3000.00,
+								'weekend_amount' => 3500.00,
+								'amount'         => 3500.00,
+								'category'       => 'Venue Rental',
+							),
+						),
+						array(
+							'label'   => 'Cinnamon Hill Great House (Weekdays $3,000 | Weekends $3,500)',
 							'value'   => 'cinnamon_hill_great_house',
-							'pricing' => array( 'type' => 'fixed', 'amount' => 4500.00, 'category' => 'Venue Rental' ),
+							'pricing' => array(
+								'type'           => 'venue',
+								'is_venue'       => true,
+								'weekday_amount' => 3000.00,
+								'weekend_amount' => 3500.00,
+								'amount'         => 3500.00,
+								'category'       => 'Venue Rental',
+							),
 						),
 						array(
-							'label'   => '18th Century Aqueduct (Ceremony only not able to host reception) ($3,500.00)',
-							'value'   => '18th_century_aqueduct',
-							'pricing' => array( 'type' => 'fixed', 'amount' => 3500.00, 'category' => 'Venue Rental' ),
+							'label'   => 'Palms on the Ocean\'s Edge (Weekdays $2,000 | Weekends $2,500)',
+							'value'   => 'palms_ocean_edge',
+							'pricing' => array(
+								'type'           => 'venue',
+								'is_venue'       => true,
+								'weekday_amount' => 2000.00,
+								'weekend_amount' => 2500.00,
+								'amount'         => 2500.00,
+								'category'       => 'Venue Rental',
+							),
 						),
 						array(
-							'label'   => 'The Palms ($4,000.00)',
-							'value'   => 'the_palms',
-							'pricing' => array( 'type' => 'fixed', 'amount' => 4000.00, 'category' => 'Venue Rental' ),
+							'label'   => 'The Aqueduct (Ceremony only not able to host reception) (Weekdays $2,000 | Weekends $2,500)',
+							'value'   => 'the_aqueduct',
+							'pricing' => array(
+								'type'           => 'venue',
+								'is_venue'       => true,
+								'weekday_amount' => 2000.00,
+								'weekend_amount' => 2500.00,
+								'amount'         => 2500.00,
+								'category'       => 'Venue Rental',
+							),
 						),
 						array(
-							'label'   => 'Mount Zion Church ($2,500.00)',
+							'label'   => 'Mount Zion Church (Monday - Sunday $1,000)',
 							'value'   => 'mount_zion_church',
-							'pricing' => array( 'type' => 'fixed', 'amount' => 2500.00, 'category' => 'Venue Rental' ),
+							'pricing' => array(
+								'type'           => 'venue',
+								'is_venue'       => true,
+								'weekday_amount' => 1000.00,
+								'weekend_amount' => 1000.00,
+								'amount'         => 1000.00,
+								'category'       => 'Venue Rental',
+							),
 						),
 					),
 				),
 				array(
-					'id'         => 'budget_range',
-					'section_id' => 'sec_event',
-					'label'      => 'Please choose the range that best depicts your budget for your entire wedding (USD)',
-					'type'       => 'radio',
-					'required'   => true,
-					'options'    => array(
+					'id'             => 'budget_range',
+					'section_id'     => 'sec_event',
+					'label'          => 'Please choose the range that best depicts your budget for your entire wedding (USD)',
+					'type'           => 'radio',
+					'required'       => true,
+					'has_other_text' => true,
+					'options'        => array(
 						array( 'label' => 'Under $10,000', 'value' => 'under_10k' ),
 						array( 'label' => '$10,000 - $14,999', 'value' => '10k_15k' ),
 						array( 'label' => '$15,000 - $19,999', 'value' => '15k_20k' ),
@@ -372,33 +425,33 @@ class RHW_Form_Manager {
 							'label'   => 'Basic Bar ($30/person 1st 2 hrs, $13.50/addl hr) - Rum punch, wines, beers, sodas, juices, champagne, water',
 							'value'   => 'basic_bar',
 							'pricing' => array(
-								'type'             => 'bar_package',
-								'amount'           => 30.00,
-								'addl_hour_rate'   => 13.50,
-								'is_fb'            => true,
-								'category'         => 'Food & Beverage',
+								'type'           => 'bar_package',
+								'amount'         => 30.00,
+								'addl_hour_rate' => 13.50,
+								'is_fb'          => true,
+								'category'       => 'Food & Beverage',
 							),
 						),
 						array(
 							'label'   => 'Medium Bar ($36/person 1st 2 hrs, $16.50/addl hr) - Spirits (rums, vodka, scotch, gin), champagne, wines, beers, juices',
 							'value'   => 'medium_bar',
 							'pricing' => array(
-								'type'             => 'bar_package',
-								'amount'           => 36.00,
-								'addl_hour_rate'   => 16.50,
-								'is_fb'            => true,
-								'category'         => 'Food & Beverage',
+								'type'           => 'bar_package',
+								'amount'         => 36.00,
+								'addl_hour_rate' => 16.50,
+								'is_fb'          => true,
+								'category'       => 'Food & Beverage',
 							),
 						),
 						array(
 							'label'   => 'Premium Bar ($54/person 1st 2 hrs, $22.00/addl hr) - Top shelf (Johnnie Walker, Hennessy, Jack Daniel\'s, Appleton, Beefeater, Grey Goose, Absolut, Tequila)',
 							'value'   => 'premium_bar',
 							'pricing' => array(
-								'type'             => 'bar_package',
-								'amount'           => 54.00,
-								'addl_hour_rate'   => 22.00,
-								'is_fb'            => true,
-								'category'         => 'Food & Beverage',
+								'type'           => 'bar_package',
+								'amount'         => 54.00,
+								'addl_hour_rate' => 22.00,
+								'is_fb'          => true,
+								'category'       => 'Food & Beverage',
 							),
 						),
 					),
@@ -444,6 +497,15 @@ class RHW_Form_Manager {
 					),
 				),
 				array(
+					'id'          => 'decor_image',
+					'section_id'  => 'sec_decor_rentals',
+					'label'       => 'Please attach image of the specific wedding décor design you have in mind',
+					'help_text'   => 'Upload image file (JPG, PNG, WEBP, or PDF, max 10MB).',
+					'type'        => 'file',
+					'accept'      => 'image/*,.pdf',
+					'required'    => false,
+				),
+				array(
 					'id'         => 'personal_flowers',
 					'section_id' => 'sec_decor_rentals',
 					'label'      => 'Personal Flowers',
@@ -462,6 +524,15 @@ class RHW_Form_Manager {
 							'pricing' => array( 'type' => 'fixed', 'amount' => 125.00, 'category' => 'Personal Flowers' ),
 						),
 					),
+				),
+				array(
+					'id'          => 'bouquet_image',
+					'section_id'  => 'sec_decor_rentals',
+					'label'       => 'If you already have a bouquet in mind, please attach an image of the same',
+					'help_text'   => 'Upload floral inspiration image (JPG, PNG, WEBP, or PDF, max 10MB).',
+					'type'        => 'file',
+					'accept'      => 'image/*,.pdf',
+					'required'    => false,
 				),
 				array(
 					'id'          => 'generator_rental',
@@ -546,13 +617,14 @@ class RHW_Form_Manager {
 					),
 				),
 				array(
-					'id'         => 'entertainment_options',
-					'section_id' => 'sec_entertainment',
-					'label'      => 'What kind of entertainment do you have in mind? (Select all that apply)',
-					'type'       => 'checkboxes',
-					'required'   => false,
-					'category'   => 'Entertainment',
-					'options'    => array(
+					'id'             => 'entertainment_options',
+					'section_id'     => 'sec_entertainment',
+					'label'          => 'What kind of entertainment do you have in mind? (Select all that apply)',
+					'type'           => 'checkboxes',
+					'required'       => false,
+					'category'       => 'Entertainment',
+					'has_other_text' => true,
+					'options'        => array(
 						array(
 							'label'   => 'DJ Services - In House DJ (Ceremony, Cocktail Hour and Reception) ($1,500.00)',
 							'value'   => 'dj_services',
@@ -685,6 +757,23 @@ class RHW_Form_Manager {
 					),
 				),
 				array(
+					'id'            => 'attraction_guests',
+					'section_id'    => 'sec_attractions',
+					'label'         => 'Number of persons participating in the tour or golfing:',
+					'help_text'     => 'Specify how many persons will be taking the tour or golfing (pricing multiplies by this number, not your full wedding guest count).',
+					'type'          => 'number',
+					'required'      => false,
+					'default_value' => 20,
+					'min'           => 1,
+					'max'           => 500,
+					'conditional'   => array(
+						'enabled'  => true,
+						'field'    => 'include_attractions',
+						'operator' => 'equals',
+						'value'    => 'yes',
+					),
+				),
+				array(
 					'id'          => 'comments_additional',
 					'section_id'  => 'sec_attractions',
 					'label'       => 'Comments (or additional information)',
@@ -727,12 +816,13 @@ class RHW_Form_Manager {
 					'placeholder' => 'e.g. United States, United Kingdom, Canada, Jamaica',
 				),
 				array(
-					'id'         => 'referral_source',
-					'section_id' => 'sec_contact',
-					'label'      => 'How did you hear about Rose Hall Weddings & Events?',
-					'type'       => 'select',
-					'required'   => true,
-					'options'    => array(
+					'id'             => 'referral_source',
+					'section_id'     => 'sec_contact',
+					'label'          => 'How did you hear about Rose Hall Weddings & Events?',
+					'type'           => 'select',
+					'required'       => true,
+					'has_other_text' => true,
+					'options'        => array(
 						array( 'label' => '-- Select Option --', 'value' => '' ),
 						array( 'label' => 'Instagram', 'value' => 'instagram' ),
 						array( 'label' => 'Facebook', 'value' => 'facebook' ),

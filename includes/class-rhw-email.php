@@ -95,6 +95,7 @@ class RHW_Email {
 		$admin_url = admin_url( 'admin.php?page=rhw-calculator-submissions&action=view&id=' . $submission_id );
 		$symbol    = isset( $calc['currency_symbol'] ) ? $calc['currency_symbol'] : '$';
 		$pos       = isset( $calc['currency_position'] ) ? $calc['currency_position'] : 'before';
+		$answers   = json_decode( $submission['answers'], true ) ?: array();
 
 		ob_start();
 		?>
@@ -120,6 +121,7 @@ class RHW_Email {
 				.total-row { font-size: 16px; font-weight: bold; color: #7B112D; background: #FAF5EB; }
 				.button { display: inline-block; background: #7B112D; color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-weight: 600; margin-top: 20px; }
 				.email-footer { background: #fcfbf9; padding: 20px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #eee; }
+				.attachment-link { display: inline-block; background: #f0f4f8; padding: 6px 12px; border-radius: 4px; color: #0073aa; text-decoration: none; margin-top: 4px; font-size: 12px; }
 			</style>
 		</head>
 		<body>
@@ -137,12 +139,12 @@ class RHW_Email {
 						<tr><td class="label">Email Address:</td><td><a href="mailto:<?php echo esc_attr( $submission['customer_email'] ); ?>"><?php echo esc_html( $submission['customer_email'] ); ?></a></td></tr>
 						<tr><td class="label">Phone / WhatsApp:</td><td><?php echo esc_html( $submission['customer_phone'] ); ?></td></tr>
 						<tr><td class="label">Country of Residence:</td><td><?php echo esc_html( $submission['country_of_residence'] ); ?></td></tr>
-						<tr><td class="label">Preferred Date:</td><td><?php echo esc_html( $submission['event_date'] ); ?></td></tr>
+						<tr><td class="label">Preferred Date:</td><td><?php echo esc_html( $submission['event_date'] ); ?> (<?php echo ! empty( $calc['is_weekend'] ) ? 'Weekend/Holiday Rate' : 'Weekday Rate'; ?>)</td></tr>
 						<tr><td class="label">Guest Count:</td><td><?php echo esc_html( $submission['guest_count'] ); ?> guests</td></tr>
-						<tr><td class="label">Venue Selected:</td><td><?php echo esc_html( $submission['venue_name'] ); ?></td></tr>
+						<tr><td class="label">Venue Selected:</td><td><?php echo esc_html( ucwords( str_replace( '_', ' ', $submission['venue_name'] ) ) ); ?></td></tr>
 					</table>
 
-					<div class="section-title">Estimated Cost Breakdown</div>
+					<div class="section-title">Line Items</div>
 					<table class="breakdown-table">
 						<thead>
 							<tr>
@@ -180,11 +182,23 @@ class RHW_Email {
 								</tr>
 							<?php endif; ?>
 							<tr class="total-row">
-								<td colspan="3" style="text-align: right; padding: 12px;">Grand Total Estimate:</td>
+								<td colspan="3" style="text-align: right; padding: 12px;">Estimated Cost:</td>
 								<td class="amount" style="padding: 12px;"><?php echo esc_html( RHW_Pricing_Engine::format_money( $calc['grand_total'], $symbol, $pos ) ); ?></td>
 							</tr>
 						</tbody>
 					</table>
+
+					<?php if ( ! empty( $answers['decor_image'] ) || ! empty( $answers['bouquet_image'] ) ) : ?>
+						<div class="section-title">Uploaded Design Inspiration</div>
+						<div style="margin-bottom: 20px;">
+							<?php if ( ! empty( $answers['decor_image'] ) ) : ?>
+								<p><strong>Décor Inspiration:</strong> <a href="<?php echo esc_url( $answers['decor_image'] ); ?>" target="_blank" class="attachment-link">View Décor File &rarr;</a></p>
+							<?php endif; ?>
+							<?php if ( ! empty( $answers['bouquet_image'] ) ) : ?>
+								<p><strong>Bouquet Inspiration:</strong> <a href="<?php echo esc_url( $answers['bouquet_image'] ); ?>" target="_blank" class="attachment-link">View Bouquet File &rarr;</a></p>
+							<?php endif; ?>
+						</div>
+					<?php endif; ?>
 
 					<div style="text-align: center;">
 						<a href="<?php echo esc_url( $admin_url ); ?>" class="button">View Full Lead & Client Answers in WordPress</a>
@@ -249,10 +263,10 @@ class RHW_Email {
 					<p>
 						<strong>Event Date:</strong> <?php echo esc_html( $submission['event_date'] ); ?><br>
 						<strong>Expected Guests:</strong> <?php echo esc_html( $submission['guest_count'] ); ?><br>
-						<strong>Selected Venue:</strong> <?php echo esc_html( $submission['venue_name'] ); ?>
+						<strong>Selected Venue:</strong> <?php echo esc_html( ucwords( str_replace( '_', ' ', $submission['venue_name'] ) ) ); ?>
 					</p>
 
-					<h3 style="color: #7B112D; margin-top: 24px;">Preliminary Cost Summary</h3>
+					<h3 style="color: #7B112D; margin-top: 24px;">Line Items</h3>
 					<table class="breakdown-table">
 						<thead>
 							<tr>
@@ -288,14 +302,14 @@ class RHW_Email {
 								</tr>
 							<?php endif; ?>
 							<tr class="total-row">
-								<td colspan="2" style="text-align: right; padding: 12px;">Preliminary Grand Total:</td>
+								<td colspan="2" style="text-align: right; padding: 12px;">Estimated Cost:</td>
 								<td class="amount" style="padding: 12px;"><?php echo esc_html( RHW_Pricing_Engine::format_money( $calc['grand_total'], $symbol, $pos ) ); ?></td>
 							</tr>
 						</tbody>
 					</table>
 
 					<div class="disclaimer">
-						<strong>Disclaimer:</strong> This preliminary quote is an estimated guide based on the information provided and standard rates. Bespoke options (tents, custom florals, transport, and custom menus) are quoted upon detailed consultation. In accordance with the Data and Privacy Protection Act, your contact information will be used exclusively by Rose Hall Weddings and Events.
+						<strong>Disclaimer:</strong> This preliminary quote is an estimated guide based on selected options and standard venue rates. A 50% deposit will be required to secure your preferred venue. Bespoke options (tents, custom florals, transport, and custom menus) are quoted upon detailed consultation. In accordance with the Data and Privacy Protection Act, your contact information will be used exclusively by Rose Hall Weddings and Events.
 					</div>
 				</div>
 				<div class="email-footer">

@@ -144,12 +144,10 @@
 				</div>
 			`);
 
-			// Section title live inline editing
 			$secHeader.find('.rhw-sec-title-edit').on('blur', function() {
 				sec.title = $(this).text().trim();
 			});
 
-			// Delete section
 			$secHeader.find('.rhw-del-sec-btn').on('click', function() {
 				if (confirm('Delete this section and move its questions?')) {
 					formState.sections.splice(sIdx, 1);
@@ -159,7 +157,6 @@
 
 			$secBlock.append($secHeader);
 
-			// Questions list in this section
 			const $qList = $('<div class="rhw-questions-list"></div>');
 			const secQuestions = formState.questions.filter(q => q.section_id === sec.id);
 
@@ -175,13 +172,12 @@
 			$container.append($secBlock);
 		});
 
-		// Initialize jQuery UI sortable for drag and drop reordering
 		if ($.fn.sortable) {
 			$('.rhw-questions-list').sortable({
 				connectWith: '.rhw-questions-list',
 				handle: '.rhw-q-drag-handle',
 				placeholder: 'rhw-sortable-placeholder',
-				update: function(event, ui) {
+				update: function() {
 					syncOrderFromDOM();
 				}
 			});
@@ -192,7 +188,7 @@
 	 * Build HTML element for a single question card
 	 */
 	function createQuestionCard(q) {
-		const hasPrice = (q.options && q.options.some(o => o.pricing && o.pricing.amount > 0)) || (q.unit_price && q.unit_price > 0);
+		const hasPrice = (q.options && q.options.some(o => o.pricing && (o.pricing.amount > 0 || o.pricing.weekend_amount > 0))) || (q.unit_price && q.unit_price > 0);
 		const hasCond = q.conditional && q.conditional.enabled;
 
 		const $card = $(`
@@ -223,6 +219,9 @@
 								<option value="radio" ${q.type === 'radio' ? 'selected' : ''}>Radio Buttons</option>
 								<option value="checkboxes" ${q.type === 'checkboxes' || q.type === 'checkbox' ? 'selected' : ''}>Checkboxes</option>
 								<option value="select" ${q.type === 'select' ? 'selected' : ''}>Dropdown Select</option>
+								<option value="date" ${q.type === 'date' ? 'selected' : ''}>Date Picker (Weekday/Weekend)</option>
+								<option value="time" ${q.type === 'time' ? 'selected' : ''}>Time Picker</option>
+								<option value="file" ${q.type === 'file' ? 'selected' : ''}>Image / File Upload</option>
 								<option value="number" ${q.type === 'number' ? 'selected' : ''}>Number / Counter</option>
 								<option value="text" ${q.type === 'text' ? 'selected' : ''}>Text (Single line)</option>
 								<option value="textarea" ${q.type === 'textarea' ? 'selected' : ''}>Textarea (Multi-line)</option>
@@ -254,7 +253,8 @@
 									<th>Choice Label</th>
 									<th>Value Key</th>
 									<th>Pricing Type</th>
-									<th>Amount ($)</th>
+									<th>Weekday / Base ($)</th>
+									<th>Weekend ($)</th>
 									<th>Addl Hr ($)</th>
 									<th>Action</th>
 								</tr>
@@ -287,6 +287,8 @@
 		if (q.options && q.options.length) {
 			q.options.forEach((opt, oIdx) => {
 				const p = opt.pricing || { type: 'none', amount: 0 };
+				const weekdayVal = p.weekday_amount !== undefined ? p.weekday_amount : p.amount;
+				const weekendVal = p.weekend_amount !== undefined ? p.weekend_amount : p.amount;
 				const $tr = $(`
 					<tr>
 						<td><input type="text" class="widefat rhw-opt-label" value="${escapeHtml(opt.label || '')}"></td>
@@ -294,6 +296,7 @@
 						<td>
 							<select class="rhw-opt-ptype">
 								<option value="none" ${p.type === 'none' ? 'selected' : ''}>No Price</option>
+								<option value="venue" ${p.type === 'venue' ? 'selected' : ''}>Venue (Weekday/Weekend)</option>
 								<option value="fixed" ${p.type === 'fixed' ? 'selected' : ''}>Fixed ($)</option>
 								<option value="per_guest" ${p.type === 'per_guest' ? 'selected' : ''}>Per Guest ($/person)</option>
 								<option value="table_ratio_10" ${p.type === 'table_ratio_10' ? 'selected' : ''}>10-Guest Tables ($/table)</option>
@@ -301,22 +304,31 @@
 								<option value="bar_package" ${p.type === 'bar_package' ? 'selected' : ''}>Bar Package</option>
 							</select>
 						</td>
-						<td><input type="number" step="0.5" class="rhw-opt-amount" style="width:75px;" value="${p.amount || 0}"></td>
+						<td><input type="number" step="0.5" class="rhw-opt-amount" style="width:75px;" value="${weekdayVal || 0}"></td>
+						<td><input type="number" step="0.5" class="rhw-opt-weekend" style="width:75px;" value="${weekendVal || 0}"></td>
 						<td><input type="number" step="0.5" class="rhw-opt-addl" style="width:70px;" value="${p.addl_hour_rate || 0}"></td>
 						<td><button type="button" class="button button-small rhw-del-opt-btn">&times;</button></td>
 					</tr>
 				`);
 
-				// Event bindings for option edits
 				$tr.find('.rhw-opt-label').on('input', function() { opt.label = $(this).val(); });
 				$tr.find('.rhw-opt-value').on('input', function() { opt.value = $(this).val(); });
 				$tr.find('.rhw-opt-ptype').on('change', function() {
 					if (!opt.pricing) opt.pricing = {};
 					opt.pricing.type = $(this).val();
+					if ($(this).val() === 'venue') {
+						opt.pricing.is_venue = true;
+					}
 				});
 				$tr.find('.rhw-opt-amount').on('input', function() {
 					if (!opt.pricing) opt.pricing = {};
-					opt.pricing.amount = parseFloat($(this).val()) || 0;
+					const val = parseFloat($(this).val()) || 0;
+					opt.pricing.amount = val;
+					opt.pricing.weekday_amount = val;
+				});
+				$tr.find('.rhw-opt-weekend').on('input', function() {
+					if (!opt.pricing) opt.pricing = {};
+					opt.pricing.weekend_amount = parseFloat($(this).val()) || 0;
 				});
 				$tr.find('.rhw-opt-addl').on('input', function() {
 					if (!opt.pricing) opt.pricing = {};
@@ -331,7 +343,6 @@
 			});
 		}
 
-		// Add Option button
 		$card.find('.rhw-add-opt-btn').on('click', function() {
 			if (!q.options) q.options = [];
 			const newOpt = {
@@ -343,7 +354,6 @@
 			renderSectionsAndQuestions();
 		});
 
-		// Header expand toggle
 		$card.find('.rhw-question-header, .rhw-toggle-q-btn').on('click', function(e) {
 			if ($(e.target).closest('.rhw-del-q-btn').length || $(e.target).hasClass('rhw-q-drag-handle')) {
 				return;
@@ -351,7 +361,6 @@
 			$card.find('.rhw-question-body').slideToggle(200);
 		});
 
-		// Delete question
 		$card.find('.rhw-del-q-btn').on('click', function(e) {
 			e.stopPropagation();
 			if (confirm('Delete this question?')) {
@@ -363,7 +372,6 @@
 			}
 		});
 
-		// Live inputs for card
 		$card.find('.rhw-edit-q-label').on('input', function() {
 			q.label = $(this).val();
 			$card.find('.rhw-q-title').text(q.label || 'Untitled Question');
@@ -425,17 +433,15 @@
 	function serializeAndSubmit() {
 		syncOrderFromDOM();
 
-		// Update pricing settings from Tab 2 inputs
 		formState.pricing_settings = {
 			currency_symbol: $('#rhw_pricing_currency').val() || '$',
 			currency_position: 'before',
 			tax_rate: parseFloat($('#rhw_pricing_tax').val()) || 15.0,
 			service_charge_rate: parseFloat($('#rhw_pricing_service_charge').val()) || 20.0,
-			estimate_label: $('#rhw_pricing_estimate_label').val() || 'Estimated Investment',
+			estimate_label: $('#rhw_pricing_estimate_label').val() || 'Estimated Cost',
 			disclaimer_text: $('#rhw_pricing_disclaimer').val() || ''
 		};
 
-		// Update notification settings from Tab 3 inputs
 		formState.notification_settings = {
 			recipient_emails: $('#rhw_notif_recipients').val() || '',
 			email_subject: $('#rhw_notif_subject').val() || '',
@@ -444,7 +450,6 @@
 			send_customer_receipt: $('#rhw_notif_send_receipt').is(':checked') ? 1 : 0
 		};
 
-		// Update appearance settings from Tab 4 inputs
 		formState.appearance_settings = {
 			primary_color: $('#rhw_app_primary').val() || '#7B112D',
 			accent_color: $('#rhw_app_accent').val() || '#C5A059',
@@ -453,14 +458,12 @@
 			custom_css: $('#rhw_app_custom_css').val() || ''
 		};
 
-		// Populate hidden inputs
 		$('#rhw_sections_json').val(JSON.stringify(formState.sections));
 		$('#rhw_questions_json').val(JSON.stringify(formState.questions));
 		$('#rhw_pricing_settings_json').val(JSON.stringify(formState.pricing_settings));
 		$('#rhw_notification_settings_json').val(JSON.stringify(formState.notification_settings));
 		$('#rhw_appearance_settings_json').val(JSON.stringify(formState.appearance_settings));
 
-		// Submit form
 		$('#rhw-form-editor').submit();
 	}
 

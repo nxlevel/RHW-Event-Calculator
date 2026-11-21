@@ -1,8 +1,8 @@
 /**
  * Rose Hall Weddings Event Calculator Public JavaScript
  *
- * Real-time dynamic calculation, conditional question routing, multi-step wizard,
- * and reliable AJAX lead capture.
+ * Real-time dynamic calculation, Weekday/Weekend venue rates, full-width progress bar,
+ * file uploads, auto-scroll to missed fields, and "Other" choice inputs.
  */
 
 (function($) {
@@ -31,6 +31,9 @@
 
 		// Initial setup
 		initNumberSteppers();
+		initFileUploads();
+		initOtherTextInputs();
+		initDatePickerRates();
 		evaluateConditionalLogic();
 		runLiveCalculation();
 
@@ -85,6 +88,140 @@
 		});
 
 		/**
+		 * Date Picker Weekday / Weekend Live Detection (Requirement 1 & 2)
+		 */
+		function initDatePickerRates() {
+			const $dateInput = $wrapper.find('input[name="event_date"]');
+			if (!$dateInput.length) return;
+
+			$dateInput.on('change input', function() {
+				updateDateRateDisplay($(this).val());
+				runLiveCalculation();
+			});
+
+			if ($dateInput.val()) {
+				updateDateRateDisplay($dateInput.val());
+			}
+		}
+
+		function isDateWeekend(dateVal) {
+			if (!dateVal) return true; // Default to weekend standard
+			const parts = dateVal.split('-');
+			if (parts.length === 3) {
+				const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+				const day = d.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+				return (day === 0 || day === 5 || day === 6); // Fri, Sat, Sun
+			}
+			return true;
+		}
+
+		function updateDateRateDisplay(dateVal) {
+			const $pill = $wrapper.find('#rhw-rate-indicator-event_date');
+			if (!dateVal) {
+				$pill.hide();
+				return;
+			}
+
+			const isWeekend = isDateWeekend(dateVal);
+			const parts = dateVal.split('-');
+			const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+			const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+
+			$pill.removeClass('rhw-rate-pill-weekend rhw-rate-pill-weekday');
+			if (isWeekend) {
+				$pill.addClass('rhw-rate-pill-weekend');
+				$pill.find('.rhw-rate-pill-text').text(`${dayName}: Weekend / Holiday Rate`);
+			} else {
+				$pill.addClass('rhw-rate-pill-weekday');
+				$pill.find('.rhw-rate-pill-text').text(`${dayName}: Weekday Special Rate`);
+			}
+			$pill.fadeIn(200);
+
+			// Update prices displayed on venue choice tiles
+			$wrapper.find('input[data-is-venue="1"]').each(function() {
+				const weekdayPrice = parseFloat($(this).data('weekday-price')) || 0;
+				const weekendPrice = parseFloat($(this).data('weekend-price')) || 0;
+				const activePrice = isWeekend ? weekendPrice : weekdayPrice;
+				const $priceSpan = $(this).closest('.rhw-choice-tile').find('.rhw-venue-dynamic-price');
+				$priceSpan.text(`($${activePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`);
+			});
+		}
+
+		/**
+		 * "Other" Choice Text Inputs (Requirement 4)
+		 */
+		function initOtherTextInputs() {
+			$wrapper.find('input[type="radio"]').on('change', function() {
+				const $group = $(this).closest('.rhw-radio-group');
+				const $otherWrap = $group.find('.rhw-other-input-wrap');
+				if ($(this).data('is-other') === 1 || $(this).val() === 'other') {
+					$otherWrap.slideDown(200).find('input').focus();
+				} else {
+					$otherWrap.slideUp(200);
+				}
+			});
+
+			$wrapper.find('input[type="checkbox"]').on('change', function() {
+				const $group = $(this).closest('.rhw-checkbox-group');
+				const $otherTile = $group.find('input[data-is-other="1"], input[value="other"]');
+				const $otherWrap = $group.find('.rhw-other-input-wrap');
+				if ($otherTile.is(':checked')) {
+					$otherWrap.slideDown(200).find('input').focus();
+				} else {
+					$otherWrap.slideUp(200);
+				}
+			});
+
+			$wrapper.find('select').on('change', function() {
+				const $group = $(this).closest('.rhw-form-group');
+				const $otherWrap = $group.find('.rhw-other-input-wrap');
+				if ($(this).val() === 'other') {
+					$otherWrap.slideDown(200).find('input').focus();
+				} else {
+					$otherWrap.slideUp(200);
+				}
+			});
+		}
+
+		/**
+		 * Image / File Upload UI (Requirement 9)
+		 */
+		function initFileUploads() {
+			$wrapper.find('.rhw-file-input').on('change', function(e) {
+				const file = this.files && this.files[0];
+				const $wrap = $(this).closest('.rhw-file-upload-wrap');
+				const $dropzone = $wrap.find('.rhw-file-dropzone');
+				const $previewBox = $wrap.find('.rhw-file-preview-box');
+
+				if (file) {
+					$previewBox.find('.rhw-preview-filename').text(file.name);
+					if (file.type.match('image.*')) {
+						const reader = new FileReader();
+						reader.onload = function(evt) {
+							$previewBox.find('.rhw-preview-thumb').attr('src', evt.target.result).show();
+						};
+						reader.readAsDataURL(file);
+					} else {
+						$previewBox.find('.rhw-preview-thumb').hide();
+					}
+					$dropzone.hide();
+					$previewBox.slideDown(200);
+				}
+			});
+
+			$wrapper.find('.rhw-file-remove-btn').on('click', function() {
+				const $wrap = $(this).closest('.rhw-file-upload-wrap');
+				const $fileInput = $wrap.find('.rhw-file-input');
+				const $dropzone = $wrap.find('.rhw-file-dropzone');
+				const $previewBox = $wrap.find('.rhw-file-preview-box');
+
+				$fileInput.val('');
+				$previewBox.hide();
+				$dropzone.slideDown(200);
+			});
+		}
+
+		/**
 		 * Navigate between steps
 		 */
 		function goToStep(step) {
@@ -95,7 +232,7 @@
 
 			currentStep = step;
 
-			// Update Progress Indicator
+			// Update Full-Width Progress Indicator (Requirement 7)
 			const percent = ((step + 1) / totalSteps) * 100;
 			$wrapper.find('.rhw-progress-bar-fill').css('width', percent + '%');
 
@@ -109,14 +246,14 @@
 				}
 			});
 
-			// Smooth scroll to top of calculator
+			// Smooth scroll to top of wizard
 			$('html, body').animate({
-				scrollTop: $wrapper.offset().top - 40
+				scrollTop: $wrapper.offset().top - 30
 			}, 300);
 		}
 
 		/**
-		 * Validate required fields in the active step
+		 * Validate required fields in the active step & Jump to missed question (Requirement 5)
 		 */
 		function validateCurrentStep() {
 			let isValid = true;
@@ -124,6 +261,8 @@
 
 			$activePane.find('.rhw-form-group').removeClass('has-error');
 			$activePane.find('.rhw-error-message').hide();
+
+			let $firstErrorGroup = null;
 
 			$activePane.find('.rhw-form-group:visible').each(function() {
 				const $group = $(this);
@@ -147,12 +286,27 @@
 					isValid = false;
 					$group.addClass('has-error');
 					$group.find('.rhw-error-message').text(q.label + ' is required.').fadeIn(200);
+					if (!$firstErrorGroup) {
+						$firstErrorGroup = $group;
+					}
 				} else if (q.type === 'email' && !isValidEmail(fieldVal)) {
 					isValid = false;
 					$group.addClass('has-error');
 					$group.find('.rhw-error-message').text('Please enter a valid email address.').fadeIn(200);
+					if (!$firstErrorGroup) {
+						$firstErrorGroup = $group;
+					}
 				}
 			});
+
+			// Jump / scroll to missed question (Requirement 5)
+			if (!isValid && $firstErrorGroup) {
+				$('html, body').animate({
+					scrollTop: $firstErrorGroup.offset().top - 80
+				}, 350, function() {
+					$firstErrorGroup.find('input, select, textarea').first().focus();
+				});
+			}
 
 			return isValid;
 		}
@@ -264,8 +418,7 @@
 				}
 			});
 
-			// Include numeric inputs that might not have changed
-			$wrapper.find('input[type="number"]').each(function() {
+			$wrapper.find('input[type="number"], input[type="date"], input[type="time"]').each(function() {
 				const name = $(this).attr('name');
 				if (name && !answers[name]) {
 					answers[name] = $(this).val();
@@ -276,13 +429,14 @@
 		}
 
 		/**
-		 * Real-Time Loan-Style Live Calculation Engine
+		 * Real-Time Live Calculation Engine with Weekday/Weekend and Tour Guests (Requirement 2 & 10)
 		 */
 		function runLiveCalculation() {
 			const answers = collectAnswers();
 			const guestCount = parseInt(answers.guest_count, 10) || 75;
 			$wrapper.find('#rhw-live-guest-display').text(guestCount);
 
+			const isWeekend = isDateWeekend(answers.event_date);
 			const serviceType = answers.service_type || 'full_service';
 			const isVenueOnly = (serviceType === 'venue_only');
 
@@ -303,8 +457,8 @@
 				if (q.type === 'radio' || q.type === 'select') {
 					if (q.options && q.options.length) {
 						const selectedOpt = q.options.find(o => (o.value || o.label) === val);
-						if (selectedOpt && selectedOpt.pricing && selectedOpt.pricing.amount > 0) {
-							const item = evaluateOptionPricing(selectedOpt, guestCount, answers, q);
+						if (selectedOpt && selectedOpt.pricing) {
+							const item = evaluateOptionPricing(selectedOpt, guestCount, answers, q, isWeekend);
 							if (item && item.amount > 0) {
 								lineItems.push(item);
 								subtotal += item.amount;
@@ -319,8 +473,8 @@
 					const vals = Array.isArray(val) ? val : [val];
 					if (q.options && q.options.length) {
 						q.options.forEach(opt => {
-							if (vals.includes(opt.value || opt.label) && opt.pricing && opt.pricing.amount > 0) {
-								const item = evaluateOptionPricing(opt, guestCount, answers, q);
+							if (vals.includes(opt.value || opt.label) && opt.pricing) {
+								const item = evaluateOptionPricing(opt, guestCount, answers, q, isWeekend);
 								if (item && item.amount > 0) {
 									lineItems.push(item);
 									subtotal += item.amount;
@@ -352,10 +506,9 @@
 				}
 			});
 
-			// 2. Automated Full Service Rental Package (from standard proposal)
+			// 2. Automated Full Service Rental Package
 			if (!isVenueOnly && serviceType === 'full_service') {
 				applyStandardProposalRentals(answers, guestCount, lineItems, subtotal);
-				// Recalculate subtotal from line items
 				subtotal = lineItems.reduce((acc, curr) => acc + curr.amount, 0);
 			}
 
@@ -367,44 +520,72 @@
 			const taxAmount = subtotal > 0 ? (subtotal * taxRate) / 100 : 0.0;
 			const grandTotal = subtotal + serviceCharge + taxAmount;
 
-			// 4. Update UI displays
+			// 4. Update UI Line Items and Totals (Requirement 8)
 			updateCalculationDisplay(lineItems, subtotal, serviceCharge, taxAmount, grandTotal, serviceChargeRate, taxRate);
 		}
 
 		/**
-		 * Calculate option pricing item
+		 * Calculate option pricing item with Weekday/Weekend & Tour Participant Count (Requirement 2 & 10)
 		 */
-		function evaluateOptionPricing(opt, guestCount, answers, question) {
-			const p = opt.pricing;
+		function evaluateOptionPricing(opt, guestCount, answers, question, isWeekend) {
+			const p = opt.pricing || {};
+			let amount = parseFloat(p.amount) || 0.0;
+
+			// Check for weekday/weekend pricing on venue options (Requirement 2)
+			if (p.is_venue || p.type === 'venue' || p.weekend_amount) {
+				if (isWeekend && p.weekend_amount) {
+					amount = parseFloat(p.weekend_amount);
+				} else if (!isWeekend && p.weekday_amount) {
+					amount = parseFloat(p.weekday_amount);
+				}
+			}
+
+			if (amount <= 0 && p.type === 'none') {
+				return null;
+			}
+
 			let qty = 1;
 			let total = 0.0;
 			let note = '';
 			let isFb = !!p.is_fb;
 
 			switch (p.type) {
+				case 'venue':
 				case 'fixed':
-					total = p.amount;
-					note = 'Flat fee';
+					total = amount;
+					note = isWeekend ? 'Weekend / Holiday Rate' : 'Weekday Rate';
 					break;
+
 				case 'per_guest':
-					qty = guestCount;
-					total = p.amount * guestCount;
-					note = `${guestCount} guests × $${p.amount.toFixed(2)}`;
+					// Attraction Participant Count (Requirement 10)
+					let count = guestCount;
+					if (question.id === 'attraction_selection') {
+						const tourGuests = parseInt(answers.attraction_guests, 10);
+						if (tourGuests > 0) {
+							count = tourGuests;
+						}
+					}
+					qty = count;
+					total = amount * count;
+					note = `${count} persons × $${amount.toFixed(2)}`;
 					break;
+
 				case 'table_ratio_10':
 					qty = Math.ceil(guestCount / 10);
-					total = qty * p.amount;
-					note = `${qty} tables × $${p.amount.toFixed(2)}`;
+					total = qty * amount;
+					note = `${qty} tables × $${amount.toFixed(2)}`;
 					break;
+
 				case 'table_ratio_15':
 					qty = Math.ceil(guestCount / 15);
-					total = qty * p.amount;
-					note = `${qty} tables × $${p.amount.toFixed(2)}`;
+					total = qty * amount;
+					note = `${qty} tables × $${amount.toFixed(2)}`;
 					break;
+
 				case 'bar_package':
 					let hours = parseInt(answers.bar_duration, 10) || 2;
 					hours = Math.max(2, hours);
-					const base2 = p.amount;
+					const base2 = amount;
 					const addl = p.addl_hour_rate || 0.0;
 					const addlHours = Math.max(0, hours - 2);
 					const perPerson = base2 + (addlHours * addl);
@@ -413,8 +594,9 @@
 					isFb = true;
 					note = `${guestCount} guests × ${hours} hrs ($${perPerson.toFixed(2)}/person)`;
 					break;
+
 				default:
-					total = p.amount;
+					total = amount;
 			}
 
 			return {
@@ -422,7 +604,7 @@
 				title: opt.label || question.label,
 				category: p.category || question.category || 'General',
 				quantity: qty,
-				unit_price: p.amount,
+				unit_price: amount,
 				amount: total,
 				is_fb: isFb,
 				note: note
@@ -530,7 +712,7 @@
 		}
 
 		/**
-		 * Render line items and animate totals
+		 * Render line items and animate totals (Requirement 8: Line Items)
 		 */
 		function updateCalculationDisplay(items, subtotal, serviceCharge, tax, grandTotal, serviceRate, taxRate) {
 			const $list = $wrapper.find('#rhw-line-items-container');
@@ -596,25 +778,26 @@
 		}
 
 		/**
-		 * Submit quote request and lead details via AJAX
+		 * Submit quote request and lead details via AJAX with FormData support
 		 */
 		function handleFormSubmit() {
 			isSubmitting = true;
 			const $submitBtn = $wrapper.find('.rhw-btn-submit');
 			$submitBtn.addClass('loading').prop('disabled', true);
 
-			const answers = collectAnswers();
+			const formElement = $wrapper.find('.rhw-calculator-form')[0];
+			const formData = new FormData(formElement);
+
+			formData.append('action', 'rhw_submit_quote');
+			formData.append('nonce', config.nonce);
+			formData.append('form_id', formId);
 
 			$.ajax({
 				url: config.ajax_url,
 				type: 'POST',
-				data: {
-					action: 'rhw_submit_quote',
-					nonce: config.nonce,
-					form_id: formId,
-					answers: answers,
-					rhw_website_hp: $wrapper.find('input[name="rhw_website_hp"]').val() || ''
-				},
+				data: formData,
+				processData: false,
+				contentType: false,
 				dataType: 'json',
 				success: function(response) {
 					if (response.success) {

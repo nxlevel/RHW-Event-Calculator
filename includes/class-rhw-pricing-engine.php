@@ -49,6 +49,23 @@ class RHW_Pricing_Engine {
 			}
 		}
 
+		// 2. Determine Day Type (Weekday vs Weekend / Holiday) from event_date
+		$is_weekend = false;
+		if ( ! empty( $answers['event_date'] ) ) {
+			$date_str = sanitize_text_field( $answers['event_date'] );
+			$timestamp = strtotime( $date_str );
+			if ( $timestamp ) {
+				$day_of_week = (int) date( 'N', $timestamp ); // 1 (Mon) to 7 (Sun)
+				// Friday (5), Saturday (6), Sunday (7) are weekend rates in luxury venue hospitality
+				if ( $day_of_week >= 5 ) {
+					$is_weekend = true;
+				}
+			}
+		}
+		if ( isset( $answers['day_type'] ) ) {
+			$is_weekend = ( 'weekend' === $answers['day_type'] );
+		}
+
 		// Check service type early for macro-skips
 		$service_type = '';
 		foreach ( $questions as $q ) {
@@ -63,7 +80,7 @@ class RHW_Pricing_Engine {
 		$subtotal    = 0.0;
 		$fb_subtotal = 0.0;
 
-		// 2. Evaluate each question and its pricing rules
+		// 3. Evaluate each question and its pricing rules
 		foreach ( $questions as $q ) {
 			$qid = isset( $q['id'] ) ? $q['id'] : '';
 			if ( empty( $qid ) ) {
@@ -94,7 +111,7 @@ class RHW_Pricing_Engine {
 					foreach ( $q['options'] as $opt ) {
 						$opt_val = isset( $opt['value'] ) ? $opt['value'] : ( isset( $opt['label'] ) ? $opt['label'] : '' );
 						if ( $opt_val === $selected_val ) {
-							$item = self::evaluate_option_pricing( $opt, $guest_count, $answers, $q );
+							$item = self::evaluate_option_pricing( $opt, $guest_count, $answers, $q, $is_weekend );
 							if ( $item && $item['amount'] > 0 ) {
 								$line_items[] = $item;
 								$subtotal    += $item['amount'];
@@ -115,7 +132,7 @@ class RHW_Pricing_Engine {
 					foreach ( $q['options'] as $opt ) {
 						$opt_val = isset( $opt['value'] ) ? $opt['value'] : ( isset( $opt['label'] ) ? $opt['label'] : '' );
 						if ( in_array( $opt_val, $selected_vals, true ) ) {
-							$item = self::evaluate_option_pricing( $opt, $guest_count, $answers, $q );
+							$item = self::evaluate_option_pricing( $opt, $guest_count, $answers, $q, $is_weekend );
 							if ( $item && $item['amount'] > 0 ) {
 								$line_items[] = $item;
 								$subtotal    += $item['amount'];
@@ -154,20 +171,20 @@ class RHW_Pricing_Engine {
 			}
 		}
 
-		// 3. Automated Décor & Rental Requirements for Full Service (as shown in the real quote)
-		// If Full Service is chosen and the guest count is present, default dining & ceremony rentals can be automatically calculated:
+		// 4. Automated Décor & Rental Requirements for Full Service (as shown in the real quote)
 		if ( ! $is_venue_only && 'full_service' === $service_type ) {
 			self::apply_standard_full_service_rentals( $answers, $guest_count, $line_items, $subtotal, $currency_symbol, $currency_position );
 		}
 
-		// 4. Calculate Taxes and Service Charges
-		// Real Quote breakdown: 20% Service charge on Food & Beverage, 15% Tax on Subtotal
+		// 5. Calculate Taxes and Service Charges
+		// 20% Service charge on Food & Beverage, 15% Tax on Subtotal
 		$fb_service_charge = ( $fb_subtotal > 0 && $service_charge_rate > 0 ) ? round( ( $fb_subtotal * $service_charge_rate ) / 100, 2 ) : 0.00;
 		$tax_amount        = ( $subtotal > 0 && $tax_rate > 0 ) ? round( ( $subtotal * $tax_rate ) / 100, 2 ) : 0.00;
 		$grand_total       = round( $subtotal + $fb_service_charge + $tax_amount, 2 );
 
 		return array(
 			'guest_count'         => $guest_count,
+			'is_weekend'          => $is_weekend,
 			'line_items'          => $line_items,
 			'subtotal'            => round( $subtotal, 2 ),
 			'fb_subtotal'         => round( $fb_subtotal, 2 ),
@@ -189,17 +206,27 @@ class RHW_Pricing_Engine {
 	}
 
 	/**
-	 * Evaluate pricing for a single selected option.
+	 * Evaluate pricing for a single selected option with Weekday/Weekend support.
 	 */
-	private static function evaluate_option_pricing( $opt, $guest_count, $answers, $question ) {
+	private static function evaluate_option_pricing( $opt, $guest_count, $answers, $question, $is_weekend = false ) {
 		if ( ! isset( $opt['pricing'] ) || ! is_array( $opt['pricing'] ) ) {
 			return null;
 		}
 
 		$pricing = $opt['pricing'];
 		$type    = isset( $pricing['type'] ) ? $pricing['type'] : 'none';
-		$amount  = isset( $pricing['amount'] ) ? floatval( $pricing['amount'] ) : 0.0;
-		$label   = isset( $opt['label'] ) ? $opt['label'] : ( isset( $opt['value'] ) ? $opt['value'] : '' );
+
+		// Determine base amount with Weekday / Weekend support
+		$amount = isset( $pricing['amount'] ) ? floatval( $pricing['amount'] ) : 0.0;
+		if ( ! empty( $pricing['is_venue'] ) || 'venue' === $type || ! empty( $pricing['weekend_amount'] ) ) {
+			if ( $is_weekend && isset( $pricing['weekend_amount'] ) && floatval( $pricing['weekend_amount'] ) > 0 ) {
+				$amount = floatval( $pricing['weekend_amount'] );
+			} elseif ( ! $is_weekend && isset( $pricing['weekday_amount'] ) && floatval( $pricing['weekday_amount'] ) > 0 ) {
+				$amount = floatval( $pricing['weekday_amount'] );
+			}
+		}
+
+		$label = isset( $opt['label'] ) ? $opt['label'] : ( isset( $opt['value'] ) ? $opt['value'] : '' );
 
 		if ( 'none' === $type || $amount <= 0.0 ) {
 			return null;
@@ -213,34 +240,39 @@ class RHW_Pricing_Engine {
 		$note       = '';
 
 		switch ( $type ) {
+			case 'venue':
 			case 'fixed':
 				$qty   = 1;
 				$total = $amount;
-				$note  = 'Flat fee';
+				$note  = $is_weekend ? 'Weekend/Holiday Rate' : 'Weekday Rate';
 				break;
 
 			case 'per_guest':
-				$qty   = $guest_count;
-				$total = $amount * $guest_count;
-				$note  = sprintf( '%d guests × $%s', $guest_count, number_format( $amount, 2 ) );
+				// Check if this is an attraction tour where custom participant count is specified!
+				$multiplier = $guest_count;
+				if ( isset( $question['id'] ) && 'attraction_selection' === $question['id'] ) {
+					if ( isset( $answers['attraction_guests'] ) && is_numeric( $answers['attraction_guests'] ) && intval( $answers['attraction_guests'] ) > 0 ) {
+						$multiplier = intval( $answers['attraction_guests'] );
+					}
+				}
+				$qty   = $multiplier;
+				$total = $amount * $multiplier;
+				$note  = sprintf( '%d guests × $%s', $multiplier, number_format( $amount, 2 ) );
 				break;
 
 			case 'table_ratio_10':
-				// e.g. 10-seater dining tables: ceil(guests / 10)
 				$qty   = (int) ceil( $guest_count / 10 );
 				$total = $qty * $amount;
 				$note  = sprintf( '%d tables (10-seater) × $%s', $qty, number_format( $amount, 2 ) );
 				break;
 
 			case 'table_ratio_15':
-				// e.g. Bistro cocktail tables: ceil(guests / 15)
 				$qty   = (int) ceil( $guest_count / 15 );
 				$total = $qty * $amount;
 				$note  = sprintf( '%d bistro tables × $%s', $qty, number_format( $amount, 2 ) );
 				break;
 
 			case 'bar_package':
-				// Base 2 hours + additional hours
 				$duration = 2;
 				if ( isset( $answers['bar_duration'] ) && is_numeric( $answers['bar_duration'] ) ) {
 					$duration = max( 2, intval( $answers['bar_duration'] ) );
@@ -279,14 +311,12 @@ class RHW_Pricing_Engine {
 	 * Apply standard decor & rental items for full service weddings as quoted in the Rose Hall standard proposal.
 	 */
 	private static function apply_standard_full_service_rentals( $answers, $guest_count, &$line_items, &$subtotal, $symbol, $pos ) {
-		// Check if standard decor package is active in answers (default active for full service)
 		$include_decor = isset( $answers['include_standard_decor'] ) ? ( 'yes' === $answers['include_standard_decor'] || '1' === (string) $answers['include_standard_decor'] ) : true;
 
 		if ( ! $include_decor ) {
 			return;
 		}
 
-		// Ensure we don't duplicate if already added
 		$existing_keys = wp_list_pluck( $line_items, 'key' );
 
 		// 1. Gold Chiavari Chairs / Ivory Cushions ($7.00 per guest)

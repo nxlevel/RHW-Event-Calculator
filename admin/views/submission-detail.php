@@ -52,8 +52,8 @@ $form      = RHW_Form_Manager::get_form( $submission['form_id'] );
 		<div class="rhw-detail-main">
 			<!-- Quote Calculation Summary Card -->
 			<div class="rhw-card">
-				<h2 class="rhw-card-title"><?php esc_html_e( 'Estimated Cost Breakdown', 'rhw-calculator' ); ?></h2>
-				<p class="description"><?php esc_html_e( 'Itemized line items calculated from client questionnaire answers and Rose Hall venue pricing rules.', 'rhw-calculator' ); ?></p>
+				<h2 class="rhw-card-title"><?php esc_html_e( 'Line Items', 'rhw-calculator' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Calculated from client questionnaire answers, Weekday/Weekend venue selection, and Rose Hall venue pricing rules.', 'rhw-calculator' ); ?></p>
 
 				<table class="wp-list-table widefat striped" style="margin-top: 15px;">
 					<thead>
@@ -76,7 +76,7 @@ $form      = RHW_Form_Manager::get_form( $submission['form_id'] );
 							<?php endforeach; ?>
 						<?php else : ?>
 							<tr>
-								<td colspan="4"><?php esc_html_e( 'No breakdown items recorded.', 'rhw-calculator' ); ?></td>
+								<td colspan="4"><?php esc_html_e( 'No line items recorded.', 'rhw-calculator' ); ?></td>
 							</tr>
 						<?php endif; ?>
 					</tbody>
@@ -98,7 +98,7 @@ $form      = RHW_Form_Manager::get_form( $submission['form_id'] );
 							</tr>
 						<?php endif; ?>
 						<tr style="background: #FAF5EB; font-size: 16px;">
-							<th colspan="3" style="text-align: right; color: #7B112D;"><?php esc_html_e( 'Grand Total Estimate:', 'rhw-calculator' ); ?></th>
+							<th colspan="3" style="text-align: right; color: #7B112D;"><?php esc_html_e( 'Estimated Cost:', 'rhw-calculator' ); ?></th>
 							<th style="text-align: right; color: #7B112D; font-size: 18px;">$<?php echo esc_html( number_format( (float) $submission['grand_total'], 2 ) ); ?></th>
 						</tr>
 					</tfoot>
@@ -114,11 +114,25 @@ $form      = RHW_Form_Manager::get_form( $submission['form_id'] );
 					<?php foreach ( $answers as $key => $val ) : ?>
 						<?php
 						$display_label = ucwords( str_replace( '_', ' ', $key ) );
-						$display_value = is_array( $val ) ? implode( ', ', $val ) : $val;
+						$is_url = is_string( $val ) && filter_var( $val, FILTER_VALIDATE_URL );
+						$is_image = $is_url && preg_match( '/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i', $val );
 						?>
 						<tr>
 							<th scope="row" style="width: 35%; font-weight: 600; color: #555;"><?php echo esc_html( $display_label ); ?></th>
-							<td><?php echo nl2br( esc_html( $display_value ) ); ?></td>
+							<td>
+								<?php if ( $is_image ) : ?>
+									<div>
+										<a href="<?php echo esc_url( $val ); ?>" target="_blank">
+											<img src="<?php echo esc_url( $val ); ?>" style="max-width: 200px; max-height: 150px; border-radius: 4px; border: 1px solid #ddd; padding: 3px;" alt="Client Upload">
+										</a>
+										<div><a href="<?php echo esc_url( $val ); ?>" target="_blank" class="button button-small" style="margin-top: 6px;">View Full Image &rarr;</a></div>
+									</div>
+								<?php elseif ( $is_url ) : ?>
+									<a href="<?php echo esc_url( $val ); ?>" target="_blank"><?php echo esc_html( $val ); ?></a>
+								<?php else : ?>
+									<?php echo nl2br( esc_html( is_array( $val ) ? implode( ', ', $val ) : $val ) ); ?>
+								<?php endif; ?>
+							</td>
 						</tr>
 					<?php endforeach; ?>
 				</table>

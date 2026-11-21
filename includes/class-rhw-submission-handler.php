@@ -2,8 +2,8 @@
 /**
  * Frontend Submission Handler.
  *
- * Processes lead submissions, validates input on server, recalculates estimate,
- * prevents duplicate submissions, and dispatches notifications.
+ * Processes lead submissions, validates input on server, handles image uploads,
+ * recalculates estimate, prevents duplicate submissions, and dispatches notifications.
  *
  * @package RoseHallWeddings
  */
@@ -54,7 +54,6 @@ class RHW_Submission_Handler {
 
 		// 1. Anti-Spam Honeypot Check
 		if ( ! empty( $_POST['rhw_website_hp'] ) ) {
-			// Silently reject bot submissions
 			wp_send_json_success( array(
 				'message' => esc_html__( 'Thank you. Your request has been received.', 'rhw-calculator' ),
 			) );
@@ -72,7 +71,24 @@ class RHW_Submission_Handler {
 		$raw_answers = isset( $_POST['answers'] ) ? (array) $_POST['answers'] : array();
 		$answers     = $this->sanitize_answers( $raw_answers );
 
-		// 4. Server-Side Required Field Validation
+		// 4. Handle File Uploads (Décor design, bouquet inspiration)
+		$uploaded_files = $this->handle_file_uploads();
+		foreach ( $uploaded_files as $file_qid => $file_url ) {
+			$answers[ $file_qid ] = esc_url_raw( $file_url );
+		}
+
+		// Handle "Other" custom text overrides
+		if ( isset( $_POST['answers_other'] ) && is_array( $_POST['answers_other'] ) ) {
+			foreach ( $_POST['answers_other'] as $other_key => $other_val ) {
+				$clean_key = sanitize_key( $other_key );
+				$clean_val = sanitize_text_field( wp_unslash( $other_val ) );
+				if ( ! empty( $clean_val ) && isset( $answers[ $clean_key ] ) && 'other' === $answers[ $clean_key ] ) {
+					$answers[ $clean_key ] = 'Other: ' . $clean_val;
+				}
+			}
+		}
+
+		// 5. Server-Side Required Field Validation
 		$errors = $this->validate_required_fields( $form, $answers );
 		if ( ! empty( $errors ) ) {
 			wp_send_json_error( array(
@@ -86,7 +102,9 @@ class RHW_Submission_Handler {
 		$customer_email  = isset( $answers['lead_email'] ) ? sanitize_email( $answers['lead_email'] ) : '';
 		$customer_phone  = isset( $answers['lead_phone'] ) ? sanitize_text_field( $answers['lead_phone'] ) : '';
 		$customer_res    = isset( $answers['lead_country'] ) ? sanitize_text_field( $answers['lead_country'] ) : '';
-		$event_date      = isset( $answers['event_date'] ) ? sanitize_text_field( $answers['event_date'] ) : '';
+		$raw_event_date  = isset( $answers['event_date'] ) ? sanitize_text_field( $answers['event_date'] ) : '';
+		$raw_event_time  = isset( $answers['event_time'] ) ? sanitize_text_field( $answers['event_time'] ) : '';
+		$event_date_comb = ! empty( $raw_event_time ) ? ( $raw_event_date . ' at ' . $raw_event_time ) : $raw_event_date;
 		$event_type      = isset( $answers['event_type'] ) ? sanitize_text_field( $answers['event_type'] ) : '';
 		$venue_selection = isset( $answers['venue_selection'] ) ? sanitize_text_field( $answers['venue_selection'] ) : '';
 
@@ -94,7 +112,7 @@ class RHW_Submission_Handler {
 			wp_send_json_error( array( 'message' => esc_html__( 'A valid full name and email address are required.', 'rhw-calculator' ) ) );
 		}
 
-		// 5. Anti-Duplicate Submission Lock (30-second window for same email & form)
+		// 6. Anti-Duplicate Submission Lock (30-second window for same email & form)
 		$ip_address      = sanitize_text_field( wp_unslash( isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : '' ) );
 		$duplicate_hash  = 'rhw_sub_' . md5( $customer_email . '_' . $form_id . '_' . $ip_address );
 		if ( get_transient( $duplicate_hash ) ) {
@@ -102,12 +120,12 @@ class RHW_Submission_Handler {
 				'message' => esc_html__( 'You recently submitted a quote request. Our specialists are already processing your details!', 'rhw-calculator' ),
 			) );
 		}
-		set_transient( $duplicate_hash, true, 30 ); // 30-second anti-duplicate guard
+		set_transient( $duplicate_hash, true, 30 );
 
-		// 6. Authoritative Server-Side Calculation (Never trust client prices)
+		// 7. Authoritative Server-Side Calculation (Never trust client prices)
 		$calc = RHW_Pricing_Engine::calculate( $form, $answers );
 
-		// 7. Store Submission in Database
+		// 8. Store Submission in Database
 		global $wpdb;
 		$submissions_table = $wpdb->prefix . 'rhw_submissions';
 
@@ -117,7 +135,7 @@ class RHW_Submission_Handler {
 			'customer_email'       => $customer_email,
 			'customer_phone'       => $customer_phone,
 			'country_of_residence' => $customer_res,
-			'event_date'           => $event_date,
+			'event_date'           => $event_date_comb,
 			'guest_count'          => $calc['guest_count'],
 			'event_type'           => $event_type,
 			'venue_name'           => $venue_selection,
@@ -145,20 +163,71 @@ class RHW_Submission_Handler {
 
 		$submission_id = $wpdb->insert_id;
 
-		// 8. Send Notification Emails
+		// 9. Send Notification Emails
 		RHW_Email::send_admin_notification( $submission_id, $submission_data, $form, $calc );
 		RHW_Email::send_customer_confirmation( $submission_id, $submission_data, $form, $calc );
 
-		// 9. Return Success Response
+		// 10. Return Success Response
 		wp_send_json_success( array(
 			'submission_id'   => $submission_id,
 			'customer_name'   => $customer_name,
 			'customer_email'  => $customer_email,
-			'event_date'      => $event_date,
+			'event_date'      => $event_date_comb,
 			'guest_count'     => $calc['guest_count'],
 			'grand_total'     => $calc['formatted']['grand_total'],
-			'message'         => esc_html__( 'Thank you! Your wedding consultation request and preliminary estimate have been submitted. Our Destination Relationship Specialists will contact you within 3 to 5 business days.', 'rhw-calculator' ),
+			'message'         => esc_html__( 'Thank you! Your wedding consultation request and estimated cost have been submitted. Our Destination Relationship Specialists will contact you within 3 to 5 business days.', 'rhw-calculator' ),
 		) );
+	}
+
+	/**
+	 * Handle file uploads securely.
+	 */
+	private function handle_file_uploads() {
+		$uploaded = array();
+
+		if ( empty( $_FILES ) ) {
+			return $uploaded;
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+
+		// Support $_FILES['answers_files'] or direct keys
+		$files_source = isset( $_FILES['answers_files'] ) ? $_FILES['answers_files'] : $_FILES;
+
+		foreach ( $files_source['name'] as $field_key => $filename ) {
+			if ( empty( $filename ) ) {
+				continue;
+			}
+
+			$file = array(
+				'name'     => $files_source['name'][ $field_key ],
+				'type'     => $files_source['type'][ $field_key ],
+				'tmp_name' => $files_source['tmp_name'][ $field_key ],
+				'error'    => $files_source['error'][ $field_key ],
+				'size'     => $files_source['size'][ $field_key ],
+			);
+
+			// Check file size (10MB max)
+			if ( $file['size'] > 10 * 1024 * 1024 ) {
+				continue;
+			}
+
+			// Validate MIME type
+			$file_type = wp_check_filetype( $file['name'] );
+			$allowed   = array( 'jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf' );
+			if ( ! in_array( strtolower( $file_type['ext'] ), $allowed, true ) ) {
+				continue;
+			}
+
+			$upload_overrides = array( 'test_form' => false );
+			$movefile         = wp_handle_upload( $file, $upload_overrides );
+
+			if ( $movefile && empty( $movefile['error'] ) ) {
+				$uploaded[ sanitize_key( $field_key ) ] = $movefile['url'];
+			}
+		}
+
+		return $uploaded;
 	}
 
 	/**
@@ -173,7 +242,6 @@ class RHW_Submission_Handler {
 				continue;
 			}
 
-			// Check conditional visibility: if question is conditionally hidden, do not require it!
 			if ( ! RHW_Pricing_Engine::is_question_visible( $q, $answers ) ) {
 				continue;
 			}

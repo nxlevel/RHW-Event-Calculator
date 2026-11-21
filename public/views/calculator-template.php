@@ -2,8 +2,8 @@
 /**
  * Public Calculator Template.
  *
- * Renders the multi-step interactive event calculator, live loan-style estimate card,
- * and lead capture form.
+ * Renders the multi-step interactive event calculator, full-width progress bar,
+ * live loan-style estimate card, file uploads, and lead capture form.
  *
  * @package RoseHallWeddings
  */
@@ -18,7 +18,10 @@ $pricing     = isset( $form['pricing_settings'] ) ? $form['pricing_settings'] : 
 $appearance  = isset( $form['appearance_settings'] ) ? $form['appearance_settings'] : array();
 
 $currency_symbol = ! empty( $pricing['currency_symbol'] ) ? $pricing['currency_symbol'] : '$';
-$estimate_label  = ! empty( $pricing['estimate_label'] ) ? $pricing['estimate_label'] : __( 'Estimated Investment', 'rhw-calculator' );
+$estimate_label  = ! empty( $pricing['estimate_label'] ) ? $pricing['estimate_label'] : __( 'Estimated Cost', 'rhw-calculator' );
+if ( 'Estimated Investment' === $estimate_label ) {
+	$estimate_label = __( 'Estimated Cost', 'rhw-calculator' );
+}
 $disclaimer_text = ! empty( $pricing['disclaimer_text'] ) ? $pricing['disclaimer_text'] : '';
 
 // Brand styling inline variables
@@ -46,28 +49,27 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 		<?php endif; ?>
 	</header>
 
+	<!-- Step Progress Indicator: Full Width Across Both Columns -->
+	<nav class="rhw-wizard-nav rhw-full-width-nav" aria-label="<?php esc_attr_e( 'Calculator Steps', 'rhw-calculator' ); ?>">
+		<div class="rhw-progress-bar-track">
+			<div class="rhw-progress-bar-fill" style="width: 16.66%;"></div>
+		</div>
+		<ul class="rhw-steps-list">
+			<?php foreach ( $sections as $s_idx => $sec ) : ?>
+				<li class="rhw-step-item <?php echo 0 === $s_idx ? 'active' : ''; ?>" data-step-index="<?php echo esc_attr( $s_idx ); ?>">
+					<span class="rhw-step-number"><?php echo esc_html( $s_idx + 1 ); ?></span>
+					<span class="rhw-step-title"><?php echo esc_html( $sec['title'] ); ?></span>
+				</li>
+			<?php endforeach; ?>
+		</ul>
+	</nav>
+
 	<!-- Main Calculator Layout: 2 Columns (Form Steps + Sticky Estimate Summary) -->
 	<div class="rhw-calc-grid">
 		<!-- Left: Form Wizard Steps -->
 		<div class="rhw-calc-main">
-			<!-- Step Progress Indicator -->
-			<nav class="rhw-wizard-nav" aria-label="<?php esc_attr_e( 'Calculator Steps', 'rhw-calculator' ); ?>">
-				<div class="rhw-progress-bar-track">
-					<div class="rhw-progress-bar-fill" style="width: 16.66%;"></div>
-				</div>
-				<ul class="rhw-steps-list">
-					<?php foreach ( $sections as $s_idx => $sec ) : ?>
-						<li class="rhw-step-item <?php echo 0 === $s_idx ? 'active' : ''; ?>" data-step-index="<?php echo esc_attr( $s_idx ); ?>">
-							<span class="rhw-step-number"><?php echo esc_html( $s_idx + 1 ); ?></span>
-							<span class="rhw-step-title"><?php echo esc_html( $sec['title'] ); ?></span>
-						</li>
-					<?php endforeach; ?>
-				</ul>
-			</nav>
-
-			<!-- Wizard Form Form -->
-			<form class="rhw-calculator-form" novalidate>
-				<!-- Anti-spam Honeypot (hidden from human visitors) -->
+			<form class="rhw-calculator-form" enctype="multipart/form-data" novalidate>
+				<!-- Anti-spam Honeypot -->
 				<div style="display:none !important;" aria-hidden="true">
 					<label for="rhw_hp_<?php echo esc_attr( $form_id ); ?>">Leave this field blank</label>
 					<input type="text" name="rhw_website_hp" id="rhw_hp_<?php echo esc_attr( $form_id ); ?>" tabindex="-1" autocomplete="off">
@@ -98,8 +100,10 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 								$qid       = esc_attr( $q['id'] );
 								$is_req    = ! empty( $q['required'] );
 								$cond_data = ! empty( $q['conditional'] ) ? wp_json_encode( $q['conditional'] ) : '';
+								$has_other = ! empty( $q['has_other_text'] );
 								?>
 								<div class="rhw-form-group rhw-q-field"
+								     id="rhw-group-<?php echo $qid; ?>"
 								     data-qid="<?php echo $qid; ?>"
 								     <?php if ( $cond_data ) : ?>data-conditional='<?php echo esc_attr( $cond_data ); ?>'<?php endif; ?>
 								     <?php if ( ! empty( $q['requires_full_service'] ) ) : ?>data-full-service-only="1"<?php endif; ?>>
@@ -115,28 +119,109 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 										<div class="rhw-field-help"><?php echo esc_html( $q['help_text'] ); ?></div>
 									<?php endif; ?>
 
-									<!-- Field Inputs depending on Type -->
-									<?php if ( 'radio' === $q['type'] ) : ?>
+									<!-- Date Picker with Weekday / Weekend Live Indicator -->
+									<?php if ( 'date' === $q['type'] ) : ?>
+										<div class="rhw-date-picker-wrap">
+											<input type="date"
+											       name="<?php echo $qid; ?>"
+											       id="rhw_field_<?php echo $qid; ?>"
+											       class="rhw-text-input rhw-date-input"
+											       min="<?php echo esc_attr( date( 'Y-m-d' ) ); ?>"
+											       <?php echo $is_req ? 'required' : ''; ?>>
+											<div class="rhw-date-rate-pill" id="rhw-rate-indicator-<?php echo $qid; ?>" style="display:none;">
+												<span class="dashicons dashicons-calendar-alt"></span>
+												<span class="rhw-rate-pill-text"></span>
+											</div>
+										</div>
+
+									<!-- Time Picker -->
+									<?php elseif ( 'time' === $q['type'] ) : ?>
+										<div class="rhw-time-picker-wrap">
+											<input type="time"
+											       name="<?php echo $qid; ?>"
+											       id="rhw_field_<?php echo $qid; ?>"
+											       class="rhw-text-input rhw-time-input"
+											       value="16:00"
+											       <?php echo $is_req ? 'required' : ''; ?>>
+										</div>
+
+									<!-- File Upload for Décor & Bouquet Images -->
+									<?php elseif ( 'file' === $q['type'] ) : ?>
+										<div class="rhw-file-upload-wrap">
+											<label class="rhw-file-dropzone" for="rhw_field_<?php echo $qid; ?>">
+												<div class="rhw-dropzone-content">
+													<svg class="rhw-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+														<path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+													</svg>
+													<span class="rhw-upload-prompt"><strong><?php esc_html_e( 'Click to choose image', 'rhw-calculator' ); ?></strong> <?php esc_html_e( 'or drag & drop here', 'rhw-calculator' ); ?></span>
+													<span class="rhw-upload-subtext"><?php esc_html_e( 'JPG, PNG, WEBP, or PDF up to 10MB', 'rhw-calculator' ); ?></span>
+												</div>
+												<input type="file"
+												       name="answers_files[<?php echo $qid; ?>]"
+												       id="rhw_field_<?php echo $qid; ?>"
+												       class="rhw-file-input"
+												       accept="<?php echo esc_attr( isset( $q['accept'] ) ? $q['accept'] : 'image/*' ); ?>"
+												       <?php echo $is_req ? 'required' : ''; ?>>
+											</label>
+											<div class="rhw-file-preview-box" id="rhw-preview-<?php echo $qid; ?>" style="display:none;">
+												<div class="rhw-preview-info">
+													<img class="rhw-preview-thumb" src="" alt="Preview">
+													<span class="rhw-preview-filename"></span>
+												</div>
+												<button type="button" class="rhw-file-remove-btn">&times;</button>
+											</div>
+										</div>
+
+									<!-- Radio Group with "Other" Text Support & Venue Pricing -->
+									<?php elseif ( 'radio' === $q['type'] ) : ?>
 										<div class="rhw-radio-group">
 											<?php if ( ! empty( $q['options'] ) ) : ?>
 												<?php foreach ( $q['options'] as $o_idx => $opt ) : ?>
 													<?php
 													$opt_val = isset( $opt['value'] ) ? $opt['value'] : $opt['label'];
 													$opt_id  = 'rhw_rad_' . $qid . '_' . $o_idx;
+													$is_opt_other = ( 'other' === $opt_val || false !== stripos( $opt_val, 'other' ) );
+													$p = isset( $opt['pricing'] ) ? $opt['pricing'] : array();
+													$weekday_amt = isset( $p['weekday_amount'] ) ? $p['weekday_amount'] : ( isset( $p['amount'] ) ? $p['amount'] : 0 );
+													$weekend_amt = isset( $p['weekend_amount'] ) ? $p['weekend_amount'] : ( isset( $p['amount'] ) ? $p['amount'] : 0 );
+													$is_venue = ! empty( $p['is_venue'] );
 													?>
-													<label class="rhw-choice-tile rhw-radio-tile" for="<?php echo esc_attr( $opt_id ); ?>">
+													<label class="rhw-choice-tile rhw-radio-tile <?php echo $is_opt_other ? 'rhw-has-other-tile' : ''; ?>" for="<?php echo esc_attr( $opt_id ); ?>">
 														<input type="radio"
 														       name="<?php echo $qid; ?>"
 														       id="<?php echo esc_attr( $opt_id ); ?>"
 														       value="<?php echo esc_attr( $opt_val ); ?>"
+														       data-is-other="<?php echo $is_opt_other ? '1' : '0'; ?>"
+														       <?php if ( $is_venue ) : ?>
+														           data-is-venue="1"
+														           data-weekday-price="<?php echo esc_attr( $weekday_amt ); ?>"
+														           data-weekend-price="<?php echo esc_attr( $weekend_amt ); ?>"
+														       <?php endif; ?>
 														       <?php echo $is_req ? 'required' : ''; ?>>
 														<span class="rhw-choice-indicator"></span>
-														<span class="rhw-choice-text"><?php echo esc_html( $opt['label'] ); ?></span>
+														<span class="rhw-choice-text">
+															<span class="rhw-opt-main-label"><?php echo esc_html( $opt['label'] ); ?></span>
+															<?php if ( $is_venue ) : ?>
+																<span class="rhw-venue-dynamic-price" data-weekday="<?php echo esc_attr( $weekday_amt ); ?>" data-weekend="<?php echo esc_attr( $weekend_amt ); ?>">
+																	($<?php echo esc_html( number_format( $weekend_amt, 2 ) ); ?>)
+																</span>
+															<?php endif; ?>
+														</span>
 													</label>
+
+													<?php if ( $is_opt_other || ( $has_other && 'other' === $opt_val ) ) : ?>
+														<div class="rhw-other-input-wrap" id="rhw-other-wrap-<?php echo esc_attr( $qid ); ?>" style="display:none;">
+															<input type="text"
+															       name="answers_other[<?php echo $qid; ?>]"
+															       class="rhw-text-input rhw-other-text-input"
+															       placeholder="<?php esc_attr_e( 'Please specify other...', 'rhw-calculator' ); ?>">
+														</div>
+													<?php endif; ?>
 												<?php endforeach; ?>
 											<?php endif; ?>
 										</div>
 
+									<!-- Checkboxes -->
 									<?php elseif ( 'checkboxes' === $q['type'] || 'checkbox' === $q['type'] ) : ?>
 										<div class="rhw-checkbox-group">
 											<?php if ( ! empty( $q['options'] ) ) : ?>
@@ -144,19 +229,30 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 													<?php
 													$opt_val = isset( $opt['value'] ) ? $opt['value'] : $opt['label'];
 													$opt_id  = 'rhw_chk_' . $qid . '_' . $o_idx;
+													$is_chk_other = ( 'other' === $opt_val || false !== stripos( $opt_val, 'other' ) );
 													?>
 													<label class="rhw-choice-tile rhw-checkbox-tile" for="<?php echo esc_attr( $opt_id ); ?>">
 														<input type="checkbox"
 														       name="<?php echo $qid; ?>[]"
 														       id="<?php echo esc_attr( $opt_id ); ?>"
-														       value="<?php echo esc_attr( $opt_val ); ?>">
+														       value="<?php echo esc_attr( $opt_val ); ?>"
+														       data-is-other="<?php echo $is_chk_other ? '1' : '0'; ?>">
 														<span class="rhw-choice-indicator"></span>
 														<span class="rhw-choice-text"><?php echo esc_html( $opt['label'] ); ?></span>
 													</label>
+													<?php if ( $is_chk_other || ( $has_other && 'other' === $opt_val ) ) : ?>
+														<div class="rhw-other-input-wrap" id="rhw-other-chk-wrap-<?php echo esc_attr( $qid ); ?>" style="display:none;">
+															<input type="text"
+															       name="answers_other[<?php echo $qid; ?>]"
+															       class="rhw-text-input rhw-other-text-input"
+															       placeholder="<?php esc_attr_e( 'Please specify other...', 'rhw-calculator' ); ?>">
+														</div>
+													<?php endif; ?>
 												<?php endforeach; ?>
 											<?php endif; ?>
 										</div>
 
+									<!-- Select Dropdown with "Other" Support -->
 									<?php elseif ( 'select' === $q['type'] ) : ?>
 										<select name="<?php echo $qid; ?>"
 										        id="rhw_field_<?php echo $qid; ?>"
@@ -170,7 +266,16 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 												<?php endforeach; ?>
 											<?php endif; ?>
 										</select>
+										<?php if ( $has_other ) : ?>
+											<div class="rhw-other-input-wrap" id="rhw-other-sel-wrap-<?php echo esc_attr( $qid ); ?>" style="display:none; margin-top: 8px;">
+												<input type="text"
+												       name="answers_other[<?php echo $qid; ?>]"
+												       class="rhw-text-input rhw-other-text-input"
+												       placeholder="<?php esc_attr_e( 'Please specify other...', 'rhw-calculator' ); ?>">
+											</div>
+										<?php endif; ?>
 
+									<!-- Number Stepper -->
 									<?php elseif ( 'number' === $q['type'] ) : ?>
 										<div class="rhw-number-input-wrap">
 											<button type="button" class="rhw-num-btn rhw-num-minus" aria-label="Decrease">&minus;</button>
@@ -185,6 +290,7 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 											<button type="button" class="rhw-num-btn rhw-num-plus" aria-label="Increase">&plus;</button>
 										</div>
 
+									<!-- Textarea -->
 									<?php elseif ( 'textarea' === $q['type'] ) : ?>
 										<textarea name="<?php echo $qid; ?>"
 										          id="rhw_field_<?php echo $qid; ?>"
@@ -193,8 +299,9 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 										          placeholder="<?php echo esc_attr( isset( $q['placeholder'] ) ? $q['placeholder'] : '' ); ?>"
 										          <?php echo $is_req ? 'required' : ''; ?>></textarea>
 
+									<!-- Generic Text / Email / Tel -->
 									<?php else : ?>
-										<input type="<?php echo esc_attr( in_array( $q['type'], array( 'email', 'tel', 'date' ), true ) ? $q['type'] : 'text' ); ?>"
+										<input type="<?php echo esc_attr( in_array( $q['type'], array( 'email', 'tel' ), true ) ? $q['type'] : 'text' ); ?>"
 										       name="<?php echo $qid; ?>"
 										       id="rhw_field_<?php echo $qid; ?>"
 										       class="rhw-text-input"
@@ -224,7 +331,7 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 							<?php else : ?>
 								<button type="submit" class="rhw-btn rhw-btn-submit">
 									<span class="rhw-btn-spinner" aria-hidden="true"></span>
-									<span class="rhw-btn-text"><?php esc_html_e( 'Request Consultation & Estimate', 'rhw-calculator' ); ?></span>
+									<span class="rhw-btn-text"><?php esc_html_e( 'Request Consultation & Quote', 'rhw-calculator' ); ?></span>
 								</button>
 							<?php endif; ?>
 						</div>
@@ -240,7 +347,7 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 							<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
 						</svg>
 					</div>
-					<h3 class="rhw-success-heading"><?php esc_html_e( 'Your Dream Wedding Request is Received!', 'rhw-calculator' ); ?></h3>
+					<h3 class="rhw-success-heading"><?php esc_html_e( 'Your Wedding Consultation Request is Received!', 'rhw-calculator' ); ?></h3>
 					<p class="rhw-success-lead">
 						<?php esc_html_e( 'Thank you, ', 'rhw-calculator' ); ?><strong class="rhw-lead-name-text"></strong>!
 						<?php esc_html_e( 'A preliminary quote has been generated and dispatched to your email.', 'rhw-calculator' ); ?>
@@ -256,7 +363,7 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 							<strong class="rhw-lead-guests-text"></strong>
 						</div>
 						<div class="rhw-success-sum-row rhw-sum-highlight">
-							<span><?php esc_html_e( 'Preliminary Grand Total:', 'rhw-calculator' ); ?></span>
+							<span><?php esc_html_e( 'Estimated Cost:', 'rhw-calculator' ); ?></span>
 							<strong class="rhw-lead-total-text"></strong>
 						</div>
 					</div>
@@ -269,7 +376,7 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 			</div>
 		</div>
 
-		<!-- Right: Live Cost Calculator Card (Loan-style real-time updating) -->
+		<!-- Right: Live Cost Calculator Card (Sticky Sidebar that scrolls with the page) -->
 		<aside class="rhw-calc-sidebar" aria-label="<?php esc_attr_e( 'Live Cost Summary', 'rhw-calculator' ); ?>">
 			<div class="rhw-summary-card rhw-sticky-card">
 				<div class="rhw-summary-header">
@@ -284,11 +391,10 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 					</div>
 				</div>
 
-				<!-- Itemized Breakdown Drawer -->
+				<!-- Line Items Breakdown Drawer -->
 				<div class="rhw-summary-body">
-					<h4 class="rhw-breakdown-heading"><?php esc_html_e( 'Itemized Line Items', 'rhw-calculator' ); ?></h4>
+					<h4 class="rhw-breakdown-heading"><?php esc_html_e( 'Line Items', 'rhw-calculator' ); ?></h4>
 					<ul class="rhw-line-items-list" id="rhw-line-items-container">
-						<!-- Dynamically populated in real time by JS -->
 						<li class="rhw-empty-item"><?php esc_html_e( 'Select options to view live calculation.', 'rhw-calculator' ); ?></li>
 					</ul>
 
@@ -324,7 +430,7 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 		</aside>
 	</div>
 
-	<!-- Mobile Sticky Bottom Bar (Quick total peek for small screens) -->
+	<!-- Mobile Sticky Bottom Bar -->
 	<div class="rhw-mobile-summary-bar">
 		<div>
 			<div class="rhw-mobile-label"><?php echo esc_html( $estimate_label ); ?></div>
