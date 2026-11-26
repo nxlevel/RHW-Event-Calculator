@@ -87,6 +87,9 @@ $export_url = wp_nonce_url( admin_url( 'admin.php?rhw_action=export_csv' ), 'rhw
 									<?php if ( ! empty( $sub->customer_phone ) ) : ?>
 										&bull; <?php echo esc_html( $sub->customer_phone ); ?>
 									<?php endif; ?>
+									<?php if ( ! empty( $sub->country_of_residence ) ) : ?>
+										&bull; <strong><?php echo esc_html( $sub->country_of_residence ); ?></strong>
+									<?php endif; ?>
 								</div>
 							</td>
 							<td><?php echo esc_html( $sub->event_date ); ?></td>

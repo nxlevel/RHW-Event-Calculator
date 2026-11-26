@@ -145,18 +145,28 @@
 			const $secBlock = $('<div class="rhw-section-block" data-section-id="' + sec.id + '"></div>');
 			const $secHeader = $(`
 				<div class="rhw-section-header">
-					<div class="rhw-section-title-wrap">
-						<span class="dashicons dashicons-menu rhw-q-drag-handle"></span>
-						<h3 contenteditable="true" class="rhw-sec-title-edit" title="Click to edit section title">${escapeHtml(sec.title)}</h3>
+					<div class="rhw-section-header-top" style="display:flex; justify-content:space-between; align-items:center;">
+						<div class="rhw-section-title-wrap" style="display:flex; align-items:center; gap:8px;">
+							<span class="dashicons dashicons-menu rhw-q-drag-handle"></span>
+							<h3 contenteditable="true" class="rhw-sec-title-edit" title="Click to edit section title" style="margin:0; font-size:15px;">${escapeHtml(sec.title)}</h3>
+						</div>
+						<div>
+							<button type="button" class="button button-small rhw-del-sec-btn" title="Delete section">&times;</button>
+						</div>
 					</div>
-					<div>
-						<button type="button" class="button button-small rhw-del-sec-btn" title="Delete section">&times;</button>
+					<div class="rhw-sec-desc-wrap" style="margin-top:8px;">
+						<label style="display:block; font-size:11px; font-weight:600; color:#555; margin-bottom:2px;">Section Description / Subtitle:</label>
+						<input type="text" class="widefat rhw-sec-desc-input" placeholder="e.g. Design your setting with our signature chairs, linens, tableware, and floral packages." value="${escapeHtml(sec.description || '')}">
 					</div>
 				</div>
 			`);
 
 			$secHeader.find('.rhw-sec-title-edit').on('blur', function() {
 				sec.title = $(this).text().trim();
+			});
+
+			$secHeader.find('.rhw-sec-desc-input').on('input change blur', function() {
+				sec.description = $(this).val();
 			});
 
 			$secHeader.find('.rhw-del-sec-btn').on('click', function() {
@@ -230,6 +240,7 @@
 								<option value="radio" ${q.type === 'radio' ? 'selected' : ''}>Radio Buttons</option>
 								<option value="checkboxes" ${q.type === 'checkboxes' || q.type === 'checkbox' ? 'selected' : ''}>Checkboxes</option>
 								<option value="select" ${q.type === 'select' ? 'selected' : ''}>Dropdown Select</option>
+								<option value="country" ${q.type === 'country' ? 'selected' : ''}>Country Select (Standard List)</option>
 								<option value="datetime" ${q.type === 'datetime' ? 'selected' : ''}>Date & Time Picker (Weekday/Weekend)</option>
 								<option value="date" ${q.type === 'date' ? 'selected' : ''}>Date Picker (Weekday/Weekend)</option>
 								<option value="time" ${q.type === 'time' ? 'selected' : ''}>Time Picker</option>
@@ -288,6 +299,41 @@
 								<label class="rhw-label">Category</label>
 								<input type="text" class="rhw-edit-q-cat" value="${escapeHtml(q.category || 'General')}">
 							</div>
+						</div>
+					</div>
+
+					<!-- Conditional Display Logic Builder (Requirement 6) -->
+					<div class="rhw-conditional-box" style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+						<label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer;">
+							<input type="checkbox" class="rhw-edit-cond-enable" ${(q.conditional && q.conditional.enabled) ? 'checked' : ''}>
+							<span>Enable Conditional Display (show/hide based on another question)</span>
+						</label>
+						<div class="rhw-cond-details" style="${(q.conditional && q.conditional.enabled) ? '' : 'display:none;'} margin-top: 10px;">
+							<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+								<div>
+									<label class="rhw-label" style="font-size: 11px;">Parent Question:</label>
+									<select class="widefat rhw-edit-cond-field">
+										<option value="">-- Select Question --</option>
+										${formState.questions.filter(otherQ => otherQ.id !== q.id).map(otherQ => `
+											<option value="${escapeHtml(otherQ.id)}" ${(q.conditional && q.conditional.field === otherQ.id) ? 'selected' : ''}>${escapeHtml(otherQ.label || otherQ.id)}</option>
+										`).join('')}
+									</select>
+								</div>
+								<div>
+									<label class="rhw-label" style="font-size: 11px;">Condition:</label>
+									<select class="widefat rhw-edit-cond-operator">
+										<option value="equals" ${(!q.conditional || q.conditional.operator === 'equals') ? 'selected' : ''}>Equals</option>
+										<option value="not_equals" ${(q.conditional && q.conditional.operator === 'not_equals') ? 'selected' : ''}>Does Not Equal</option>
+										<option value="contains" ${(q.conditional && q.conditional.operator === 'contains') ? 'selected' : ''}>Contains / Selected</option>
+										<option value="not_empty" ${(q.conditional && q.conditional.operator === 'not_empty') ? 'selected' : ''}>Is Not Empty</option>
+									</select>
+								</div>
+								<div>
+									<label class="rhw-label" style="font-size: 11px;">Value to Match:</label>
+									<input type="text" class="widefat rhw-edit-cond-value" placeholder="e.g. yes or other" value="${escapeHtml((q.conditional && q.conditional.value !== undefined) ? q.conditional.value : '')}">
+								</div>
+							</div>
+							<p class="description" style="margin: 6px 0 0; font-size: 11px;">Example: If parent question is "Will you require transportation..." and selected answer is "yes", this question will be displayed.</p>
 						</div>
 					</div>
 				</div>
@@ -414,6 +460,41 @@
 			q.category = $(this).val();
 		});
 
+		// Conditional Logic event listeners (Requirement 6)
+		$card.find('.rhw-edit-cond-enable').on('change', function() {
+			const enabled = $(this).is(':checked');
+			if (!q.conditional) {
+				q.conditional = { enabled: false, field: '', operator: 'equals', value: '' };
+			}
+			q.conditional.enabled = enabled;
+			if (enabled) {
+				$card.find('.rhw-cond-details').slideDown(150);
+				if (!$card.find('.rhw-badge-cond').length) {
+					$card.find('.rhw-q-title-area').append('<span class="rhw-badge rhw-badge-cond">Conditional</span>');
+				} else {
+					$card.find('.rhw-badge-cond').show();
+				}
+			} else {
+				$card.find('.rhw-cond-details').slideUp(150);
+				$card.find('.rhw-badge-cond').hide();
+			}
+		});
+
+		$card.find('.rhw-edit-cond-field').on('change', function() {
+			if (!q.conditional) q.conditional = { enabled: true, field: '', operator: 'equals', value: '' };
+			q.conditional.field = $(this).val();
+		});
+
+		$card.find('.rhw-edit-cond-operator').on('change', function() {
+			if (!q.conditional) q.conditional = { enabled: true, field: '', operator: 'equals', value: '' };
+			q.conditional.operator = $(this).val();
+		});
+
+		$card.find('.rhw-edit-cond-value').on('input', function() {
+			if (!q.conditional) q.conditional = { enabled: true, field: '', operator: 'equals', value: '' };
+			q.conditional.value = $(this).val();
+		});
+
 		return $card;
 	}
 
@@ -424,6 +505,14 @@
 		const newQuestions = [];
 		$('.rhw-section-block').each(function() {
 			const secId = $(this).data('section-id');
+			const secTitle = $(this).find('.rhw-sec-title-edit').text().trim();
+			const secDesc = $(this).find('.rhw-sec-desc-input').val();
+			const sec = formState.sections.find(s => s.id === secId);
+			if (sec) {
+				if (secTitle) sec.title = secTitle;
+				if (secDesc !== undefined) sec.description = secDesc;
+			}
+
 			$(this).find('.rhw-question-item').each(function() {
 				const qId = $(this).data('qid');
 				const found = formState.questions.find(q => q.id === qId);
@@ -459,7 +548,11 @@
 			email_subject: $('#rhw_notif_subject').val() || '',
 			sender_name: $('#rhw_notif_sender_name').val() || '',
 			sender_email: $('#rhw_notif_sender_email').val() || '',
-			send_customer_receipt: $('#rhw_notif_send_receipt').is(':checked') ? 1 : 0
+			send_customer_receipt: $('#rhw_notif_send_receipt').is(':checked') ? 1 : 0,
+			customer_sender_name: $('#rhw_notif_customer_sender_name').val() || '',
+			customer_sender_email: $('#rhw_notif_customer_sender_email').val() || '',
+			customer_email_subject: $('#rhw_notif_customer_subject').val() || '',
+			customer_email_body: $('#rhw_notif_customer_body').val() || ''
 		};
 
 		formState.appearance_settings = {

@@ -74,9 +74,25 @@ class RHW_Email {
 			return false;
 		}
 
-		$subject      = 'Your Preliminary Wedding Quote & Consultation Request - Rose Hall Weddings';
-		$sender_name  = ! empty( $notification_settings['sender_name'] ) ? $notification_settings['sender_name'] : 'Rose Hall Weddings & Events';
-		$sender_email = ! empty( $notification_settings['sender_email'] ) ? $notification_settings['sender_email'] : get_option( 'admin_email' );
+		// Configurable subject template (Item 11)
+		$subject_template = ! empty( $notification_settings['customer_email_subject'] )
+			? $notification_settings['customer_email_subject']
+			: 'Your Consultation Request was Sent! Preliminary Estimate - Rose Hall Weddings';
+
+		$subject = str_replace(
+			array( '{customer_name}', '{event_date}', '{submission_id}' ),
+			array( $submission_data['customer_name'], $submission_data['event_date'], $submission_id ),
+			$subject_template
+		);
+
+		// Configurable sender details (Item 11)
+		$sender_name = ! empty( $notification_settings['customer_sender_name'] )
+			? $notification_settings['customer_sender_name']
+			: ( ! empty( $notification_settings['sender_name'] ) ? $notification_settings['sender_name'] : 'Rose Hall Weddings & Events' );
+
+		$sender_email = ! empty( $notification_settings['customer_sender_email'] )
+			? $notification_settings['customer_sender_email']
+			: ( ! empty( $notification_settings['sender_email'] ) ? $notification_settings['sender_email'] : get_option( 'admin_email' ) );
 
 		$headers = array(
 			'Content-Type: text/html; charset=UTF-8',
@@ -142,6 +158,17 @@ class RHW_Email {
 						<tr><td class="label">Preferred Date:</td><td><?php echo esc_html( $submission['event_date'] ); ?> (<?php echo ! empty( $calc['is_weekend'] ) ? 'Weekend/Holiday Rate' : 'Weekday Rate'; ?>)</td></tr>
 						<tr><td class="label">Guest Count:</td><td><?php echo esc_html( $submission['guest_count'] ); ?> guests</td></tr>
 						<tr><td class="label">Venue Selected:</td><td><?php echo esc_html( ucwords( str_replace( '_', ' ', $submission['venue_name'] ) ) ); ?></td></tr>
+						<?php if ( ! empty( $submission['consultation_date'] ) && ! empty( $submission['consultation_time'] ) ) : ?>
+							<tr>
+								<td class="label" style="color: #7B112D; font-weight: bold;">Booked Consultation:</td>
+								<td>
+									<strong style="color: #7B112D;"><?php echo esc_html( date( 'l, M j, Y', strtotime( $submission['consultation_date'] ) ) . ' at ' . $submission['consultation_time'] ); ?></strong>
+									<?php if ( ! empty( $submission['gcal_link'] ) ) : ?>
+										<br><a href="<?php echo esc_url( $submission['gcal_link'] ); ?>" target="_blank" style="display:inline-block; margin-top:4px; font-size:12px; color:#4285F4; font-weight:600;">+ Add to Team Google Calendar</a>
+									<?php endif; ?>
+								</td>
+							</tr>
+						<?php endif; ?>
 					</table>
 
 					<div class="section-title">Line Items</div>
@@ -251,13 +278,52 @@ class RHW_Email {
 					<p>Your Preliminary Estimate & Next Steps</p>
 				</div>
 				<div class="email-body">
-					<p>Dear <?php echo esc_html( $submission['customer_name'] ); ?>,</p>
-					<p>Thank you for considering Rose Hall for your upcoming wedding celebration. We are delighted to assist you in making your special day truly unforgettable.</p>
+					<?php
+					$notif = isset( $form['notification_settings'] ) ? $form['notification_settings'] : array();
+					if ( is_string( $notif ) ) {
+						$notif = json_decode( $notif, true ) ?: array();
+					}
+					$custom_body = ! empty( $notif['customer_email_body'] ) ? $notif['customer_email_body'] : '';
+					if ( ! empty( $custom_body ) ) {
+						$custom_body = str_replace(
+							array( '{customer_name}', '{event_date}', '{submission_id}', '{consultation_slot}' ),
+							array(
+								$submission['customer_name'],
+								$submission['event_date'],
+								$submission_id,
+								! empty( $submission['consultation_date'] ) ? ( $submission['consultation_date'] . ' at ' . $submission['consultation_time'] ) : 'TBD',
+							),
+							$custom_body
+						);
+						echo '<p>Dear ' . esc_html( $submission['customer_name'] ) . ',</p>';
+						echo '<div style="margin: 16px 0 24px; font-size: 15px; line-height: 1.6;">' . nl2br( esc_html( $custom_body ) ) . '</div>';
+					} else {
+						?>
+						<p>Dear <?php echo esc_html( $submission['customer_name'] ); ?>,</p>
+						<p>Thank you for considering Rose Hall for your upcoming wedding celebration. We are delighted to assist you in making your special day truly unforgettable.</p>
+						<?php
+					}
+					?>
 
-					<div class="highlight-box">
-						<strong>What Happens Next?</strong><br>
-						Our Destination Relationship Specialists are reviewing your questionnaire and preliminary estimate. Within <strong>3 to 5 business days</strong>, a dedicated specialist will reach out to discuss your vision in depth and tailor your wedding package.
-					</div>
+					<?php if ( ! empty( $submission['consultation_date'] ) && ! empty( $submission['consultation_time'] ) ) : ?>
+						<div class="highlight-box" style="background: #FAF7F2; border-left: 4px solid #7B112D; padding: 18px 22px; margin: 20px 0; border-radius: 6px;">
+							<h4 style="margin: 0 0 6px 0; color: #7B112D; font-size: 16px;">Scheduled Consultation Appointment</h4>
+							<p style="margin: 0 0 10px 0; font-size: 14px;">
+								<strong>Date & Time:</strong> <?php echo esc_html( date( 'l, F j, Y', strtotime( $submission['consultation_date'] ) ) . ' at ' . $submission['consultation_time'] ); ?><br>
+								<strong>Meeting Format:</strong> Phone or Google Meet with our Wedding Specialist
+							</p>
+							<?php if ( ! empty( $submission['gcal_link'] ) ) : ?>
+								<a href="<?php echo esc_url( $submission['gcal_link'] ); ?>" target="_blank" style="display: inline-block; background: #4285F4; color: #ffffff !important; text-decoration: none; padding: 10px 18px; border-radius: 4px; font-weight: bold; font-size: 13px;">
+									+ Add Appointment to Google Calendar
+								</a>
+							<?php endif; ?>
+						</div>
+					<?php else : ?>
+						<div class="highlight-box">
+							<strong>What Happens Next?</strong><br>
+							Our Destination Relationship Specialists are reviewing your questionnaire and preliminary estimate. Within <strong>3 to 5 business days</strong>, a dedicated specialist will reach out to discuss your vision in depth and tailor your wedding package.
+						</div>
+					<?php endif; ?>
 
 					<h3 style="color: #7B112D; margin-top: 24px;">Your Selected Event Overview</h3>
 					<p>

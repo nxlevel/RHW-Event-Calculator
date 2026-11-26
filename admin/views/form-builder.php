@@ -234,6 +234,42 @@ $shortcode = $form_id > 0 ? '[event_cost_calculator id="' . esc_attr( $form_id )
 						</td>
 					</tr>
 				</table>
+
+				<h3 style="margin-top: 28px; padding-top: 18px; border-top: 1px solid #ccd0d4; font-size: 15px; font-weight: 600;">
+					<?php esc_html_e( 'Customer Email Notification Details', 'rhw-calculator' ); ?>
+				</h3>
+				<p class="description"><?php esc_html_e( 'Customize the sender info, subject line, and personal introductory message sent directly to the customer / lead.', 'rhw-calculator' ); ?></p>
+
+				<table class="form-table">
+					<tr>
+						<th scope="row"><label for="rhw_notif_customer_sender_name"><?php esc_html_e( 'Customer Email Sender Name', 'rhw-calculator' ); ?></label></th>
+						<td>
+							<input type="text" id="rhw_notif_customer_sender_name" class="regular-text" value="<?php echo esc_attr( isset( $form['notification_settings']['customer_sender_name'] ) ? $form['notification_settings']['customer_sender_name'] : ( isset( $form['notification_settings']['sender_name'] ) ? $form['notification_settings']['sender_name'] : 'Rose Hall Weddings & Events' ) ); ?>">
+							<p class="description"><?php esc_html_e( 'Name displayed in the customer inbox (e.g. Rose Hall Weddings & Events).', 'rhw-calculator' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="rhw_notif_customer_sender_email"><?php esc_html_e( 'Customer Email Sender Email', 'rhw-calculator' ); ?></label></th>
+						<td>
+							<input type="email" id="rhw_notif_customer_sender_email" class="regular-text" value="<?php echo esc_attr( isset( $form['notification_settings']['customer_sender_email'] ) ? $form['notification_settings']['customer_sender_email'] : ( isset( $form['notification_settings']['sender_email'] ) ? $form['notification_settings']['sender_email'] : get_option( 'admin_email' ) ) ); ?>">
+							<p class="description"><?php esc_html_e( 'The From address the customer will see (e.g. weddings@rosehall.com).', 'rhw-calculator' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="rhw_notif_customer_subject"><?php esc_html_e( 'Customer Email Subject', 'rhw-calculator' ); ?></label></th>
+						<td>
+							<input type="text" id="rhw_notif_customer_subject" class="large-text" value="<?php echo esc_attr( isset( $form['notification_settings']['customer_email_subject'] ) ? $form['notification_settings']['customer_email_subject'] : 'Your Consultation Request was Sent! Preliminary Estimate - Rose Hall Weddings' ); ?>">
+							<p class="description"><?php esc_html_e( 'Available tags: {customer_name}, {event_date}, {submission_id}', 'rhw-calculator' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="rhw_notif_customer_body"><?php esc_html_e( 'Customer Email Body Content', 'rhw-calculator' ); ?></label></th>
+						<td>
+							<textarea id="rhw_notif_customer_body" rows="5" class="large-text"><?php echo esc_textarea( isset( $form['notification_settings']['customer_email_body'] ) ? $form['notification_settings']['customer_email_body'] : "Thank you for reaching out to Rose Hall Weddings & Events! We are delighted that you are considering our historic Jamaican estate for your special celebration.\n\nAttached below is a preliminary breakdown of your estimated investment and requested selections. Our wedding team will review your details and connect with you shortly for your consultation." ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'Custom message displayed at the top of the customer email. Supports line breaks and tags: {customer_name}, {event_date}, {consultation_slot}.', 'rhw-calculator' ); ?></p>
+						</td>
+					</tr>
+				</table>
 			</div>
 		</div>
 

@@ -64,12 +64,86 @@
 		updateStickyTopOffset();
 		$(window).on('resize scroll', updateStickyTopOffset);
 
+		/**
+		 * Fail-Safe Sticky Sidebar Scroll Controller (Fixes Fixed Header Menu & Alert Banner overlapping)
+		 */
+		function initStickySidebarController() {
+			const $sidebar = $wrapper.find('.rhw-calc-sidebar');
+			const $grid = $wrapper.find('.rhw-calc-grid');
+			if (!$sidebar.length || !$grid.length) return;
+
+			function handleScroll() {
+				if (window.innerWidth <= 992) {
+					$sidebar.removeClass('rhw-sidebar-fixed rhw-sidebar-bottom').css({
+						position: '',
+						top: '',
+						left: '',
+						width: ''
+					});
+					return;
+				}
+
+				let topOffset = 165; // 80px static menu + 69px alert banner + buffer
+				if ($('#wpadminbar').length && $('#wpadminbar').is(':visible')) {
+					topOffset += $('#wpadminbar').outerHeight() || 32;
+				}
+
+				const gridEl = $grid[0];
+				const sidebarEl = $sidebar[0];
+				if (!gridEl || !sidebarEl) return;
+
+				const gridRect = gridEl.getBoundingClientRect();
+				const parentCol = $sidebar.parent()[0];
+				const parentRect = parentCol ? parentCol.getBoundingClientRect() : gridRect;
+				const sidebarWidth = parentRect.width;
+				const sidebarHeight = $sidebar.outerHeight();
+				const gridBottom = gridRect.bottom;
+				const gridTop = gridRect.top;
+
+				if (gridTop <= topOffset) {
+					if (gridBottom <= (topOffset + sidebarHeight + 20)) {
+						// Clamp to bottom of grid
+						$sidebar.removeClass('rhw-sidebar-fixed').addClass('rhw-sidebar-bottom').css({
+							position: 'absolute',
+							top: 'auto',
+							bottom: '0',
+							left: 'auto',
+							width: sidebarWidth + 'px'
+						});
+					} else {
+						// Float fixed below the fixed header menu & alert banner
+						$sidebar.removeClass('rhw-sidebar-bottom').addClass('rhw-sidebar-fixed').css({
+							position: 'fixed',
+							top: topOffset + 'px',
+							left: parentRect.left + 'px',
+							bottom: 'auto',
+							width: sidebarWidth + 'px'
+						});
+					}
+				} else {
+					// Above the grid top - standard flow
+					$sidebar.removeClass('rhw-sidebar-fixed rhw-sidebar-bottom').css({
+						position: '',
+						top: '',
+						left: '',
+						width: ''
+					});
+				}
+			}
+
+			$(window).on('scroll resize', handleScroll);
+			$wrapper.on('rhw:recalc rhw:step_changed', handleScroll);
+			setTimeout(handleScroll, 150);
+		}
+		initStickySidebarController();
+
 		// Initial setup
 		initNumberSteppers();
 		initFileUploads();
 		initOtherTextInputs();
 		initDateTimePicker();
 		initDatePickerRates();
+		initConsultationScheduler();
 		evaluateConditionalLogic();
 		runLiveCalculation();
 
@@ -271,9 +345,46 @@
 		}
 
 		/**
-		 * Image / File Upload UI (Requirement 9)
+		 * Image / File Upload UI (Requirement 9) - Drag & Drop Supported
 		 */
 		function initFileUploads() {
+			// Prevent browser from opening dragged files on window
+			$(window).on('dragover dragenter drop', function(e) {
+				if ($(e.target).closest('.rhw-file-dropzone').length === 0) {
+					e.preventDefault();
+				}
+			});
+
+			$wrapper.find('.rhw-file-dropzone').on('dragover dragenter', function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				$(this).addClass('rhw-drag-over');
+			}).on('dragleave dragend', function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				$(this).removeClass('rhw-drag-over');
+			}).on('drop', function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				$(this).removeClass('rhw-drag-over');
+				const dt = e.originalEvent && e.originalEvent.dataTransfer;
+				if (dt && dt.files && dt.files.length > 0) {
+					const $fileInput = $(this).closest('.rhw-file-upload-wrap').find('.rhw-file-input');
+					try {
+						$fileInput[0].files = dt.files;
+					} catch (err) {
+						if (window.DataTransfer) {
+							const dataTransferObj = new DataTransfer();
+							for (let i = 0; i < dt.files.length; i++) {
+								dataTransferObj.items.add(dt.files[i]);
+							}
+							$fileInput[0].files = dataTransferObj.files;
+						}
+					}
+					$fileInput.trigger('change');
+				}
+			});
+
 			$wrapper.find('.rhw-file-input').on('change', function(e) {
 				const file = this.files && this.files[0];
 				const $wrap = $(this).closest('.rhw-file-upload-wrap');
@@ -679,8 +790,8 @@
 				}
 			});
 
-			// 2. Automated Full Service Rental Package
-			if (!isVenueOnly && serviceType === 'full_service') {
+			// 2. Automated Rental Package based on user opt-in (Item 3)
+			if (!isVenueOnly) {
 				applyStandardProposalRentals(answers, guestCount, lineItems, subtotal);
 				subtotal = lineItems.reduce((acc, curr) => acc + curr.amount, 0);
 			}
@@ -799,8 +910,15 @@
 		 * Apply standard décor & ceremony items from Proposal for Full Service
 		 */
 		function applyStandardProposalRentals(answers, guestCount, lineItems, currentSubtotal) {
-			const includeDecor = answers.include_standard_decor !== 'no';
+			const includeDecor = answers.include_standard_decor === 'yes' || answers.include_standard_decor === '1' || answers.include_standard_decor === true;
 			if (!includeDecor) return;
+
+			const serviceType = answers.service_type || '';
+			const isVenueOnly = (serviceType === 'venue_only' || (typeof serviceType === 'string' && serviceType.indexOf('Venue Only') !== -1));
+			if (isVenueOnly) return;
+
+			const isElopement = (serviceType === 'elopement' || (typeof serviceType === 'string' && serviceType.indexOf('Elopement') !== -1));
+			const decorOrder = itemOrderMap['include_standard_decor_yes'] || itemOrderMap['include_standard_decor'] || interactionCounter;
 
 			const existingKeys = lineItems.map(i => i.key);
 
@@ -808,6 +926,7 @@
 			if (!existingKeys.includes('gold_chiavari_chairs')) {
 				lineItems.push({
 					key: 'gold_chiavari_chairs',
+					order: decorOrder,
 					title: 'Gold Chiavari Chairs / Ivory Cushions',
 					category: 'Décor & Rentals',
 					amount: guestCount * 7.00,
@@ -819,6 +938,7 @@
 			if (!existingKeys.includes('signing_table')) {
 				lineItems.push({
 					key: 'signing_table',
+					order: decorOrder,
 					title: 'Signing Table with Linen',
 					category: 'Décor & Rentals',
 					amount: 45.00,
@@ -826,11 +946,17 @@
 				});
 			}
 
+			// For Elopement (Ceremony only up to 20 guests for 2 hrs): do NOT add dining reception tables/settings
+			if (isElopement) {
+				return;
+			}
+
 			// Bistro Cocktail Tables ($55 ea, 1 per 15 guests)
 			if (!existingKeys.includes('bistro_tables')) {
 				const bQty = Math.ceil(guestCount / 15);
 				lineItems.push({
 					key: 'bistro_tables',
+					order: decorOrder,
 					title: 'Cocktail Bistro Tables w/ Linen',
 					category: 'Décor & Rentals',
 					amount: bQty * 55.00,
@@ -842,6 +968,7 @@
 			if (!existingKeys.includes('sweetheart_table')) {
 				lineItems.push({
 					key: 'sweetheart_table',
+					order: decorOrder,
 					title: 'Sweetheart Table with Linen',
 					category: 'Décor & Rentals',
 					amount: 60.00,
@@ -854,6 +981,7 @@
 				const tQty = Math.ceil(guestCount / 10);
 				lineItems.push({
 					key: 'dining_tables',
+					order: decorOrder,
 					title: '10-Seater Rounds / Trestle Tables',
 					category: 'Décor & Rentals',
 					amount: tQty * 55.00,
@@ -865,6 +993,7 @@
 			if (!existingKeys.includes('charger_plates')) {
 				lineItems.push({
 					key: 'charger_plates',
+					order: decorOrder,
 					title: 'Charger Plates',
 					category: 'Décor & Rentals',
 					amount: guestCount * 8.00,
@@ -876,6 +1005,7 @@
 			if (!existingKeys.includes('napkins')) {
 				lineItems.push({
 					key: 'napkins',
+					order: decorOrder,
 					title: 'Dinner Napkins',
 					category: 'Décor & Rentals',
 					amount: guestCount * 5.00,
@@ -887,6 +1017,7 @@
 			if (!existingKeys.includes('setup_cleanup_fee')) {
 				lineItems.push({
 					key: 'setup_cleanup_fee',
+					order: decorOrder,
 					title: 'Setup, Breakdown & Cleanup Fee',
 					category: 'Planning & Service',
 					amount: 350.00,
@@ -993,6 +1124,12 @@
 				}
 			}
 
+			// Append consultation slot booking details (Item 9)
+			const consultDate = $wrapper.find('#rhw_consultation_date').val() || '';
+			const consultTime = $wrapper.find('#rhw_consultation_time').val() || '';
+			if (consultDate) formData.append('consultation_date', consultDate);
+			if (consultTime) formData.append('consultation_time', consultTime);
+
 			$.ajax({
 				url: config.ajax_url,
 				type: 'POST',
@@ -1049,11 +1186,118 @@
 			$successView.find('.rhw-lead-guests-text').text(data.guest_count + ' guests');
 			$successView.find('.rhw-lead-total-text').text(data.grand_total);
 
+			// Consultation booking and Google Calendar Link (Item 9)
+			if (data.consultation_date && data.consultation_time) {
+				$successView.find('.rhw-lead-consultation-text').text(`${data.consultation_date} at ${data.consultation_time}`);
+				$successView.find('.rhw-success-consultation-row').show();
+			} else {
+				$successView.find('.rhw-success-consultation-row').hide();
+			}
+
+			if (data.gcal_link) {
+				$successView.find('.rhw-btn-gcal').attr('href', data.gcal_link);
+				$successView.find('.rhw-gcal-sync-wrap').show();
+			} else {
+				$successView.find('.rhw-gcal-sync-wrap').hide();
+			}
+
 			$successView.fadeIn(300);
 
 			$('html, body').animate({
 				scrollTop: $wrapper.offset().top - 170
 			}, 300);
+		}
+
+		/**
+		 * Consultation Slot Scheduler with Live Team Calendar Sync (Item 9)
+		 */
+		function initConsultationScheduler() {
+			const $dateInput = $wrapper.find('#rhw_consultation_date');
+			const $timeInput = $wrapper.find('#rhw_consultation_time');
+			const $slotsContainer = $wrapper.find('#rhw-slots-container');
+			const $preview = $wrapper.find('.rhw-selected-slot-preview');
+			const $previewText = $wrapper.find('.rhw-selected-slot-text');
+
+			if (!$dateInput.length || !$slotsContainer.length) return;
+
+			function loadSlotsForDate(selectedDate) {
+				if (!selectedDate) return;
+				$slotsContainer.html('<div class="rhw-slots-loading" style="padding: 6px 0; font-size: 12px; color: #666;"><span class="dashicons dashicons-update rhw-spin"></span> Checking available slots...</div>');
+
+				$.ajax({
+					url: config.ajax_url,
+					type: 'GET',
+					data: {
+						action: 'rhw_get_available_slots',
+						nonce: config.nonce,
+						date: selectedDate
+					},
+					dataType: 'json',
+					success: function(res) {
+						if (res && res.success && res.data && res.data.slots && res.data.slots.length) {
+							let html = '';
+							let firstAvailable = null;
+							res.data.slots.forEach(s => {
+								if (s.available && !firstAvailable) {
+									firstAvailable = s.time;
+								}
+								const disClass = s.available ? '' : 'disabled';
+								const titleAttr = s.available ? '' : 'title="Slot Booked"';
+								html += `<button type="button" class="rhw-slot-pill ${disClass}" data-time="${s.time}" ${titleAttr}>${s.time}</button>`;
+							});
+							$slotsContainer.html(html);
+
+							const currentTime = $timeInput.val();
+							const $match = $slotsContainer.find(`.rhw-slot-pill[data-time="${currentTime}"]:not(.disabled)`);
+							if ($match.length) {
+								$match.addClass('active');
+								updatePreview(selectedDate, currentTime);
+							} else if (firstAvailable) {
+								$slotsContainer.find(`.rhw-slot-pill[data-time="${firstAvailable}"]`).addClass('active');
+								$timeInput.val(firstAvailable);
+								updatePreview(selectedDate, firstAvailable);
+							} else {
+								$timeInput.val('');
+								$preview.hide();
+							}
+						} else {
+							const msg = (res && res.data && res.data.message) ? res.data.message : 'No consultation slots available on this date.';
+							$slotsContainer.html(`<div style="font-size:12px; color:#c02626; padding:6px 0;">${msg}</div>`);
+							$timeInput.val('');
+							$preview.hide();
+						}
+					},
+					error: function() {
+						$slotsContainer.html('<div style="font-size:12px; color:#666;">Unable to check availability. Please choose another date.</div>');
+					}
+				});
+			}
+
+			function updatePreview(dateStr, timeStr) {
+				if (dateStr && timeStr) {
+					$previewText.text(`${dateStr} at ${timeStr}`);
+					$preview.slideDown(150);
+				} else {
+					$preview.hide();
+				}
+			}
+
+			$dateInput.on('change', function() {
+				loadSlotsForDate($(this).val());
+			});
+
+			$slotsContainer.on('click', '.rhw-slot-pill:not(.disabled)', function(e) {
+				e.preventDefault();
+				$slotsContainer.find('.rhw-slot-pill').removeClass('active');
+				$(this).addClass('active');
+				const selectedTime = $(this).data('time');
+				$timeInput.val(selectedTime);
+				updatePreview($dateInput.val(), selectedTime);
+			});
+
+			if ($dateInput.val()) {
+				loadSlotsForDate($dateInput.val());
+			}
 		}
 
 		function escapeHtml(str) {

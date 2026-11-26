@@ -23,6 +23,74 @@ class RHW_Submission_Handler {
 
 		add_action( 'wp_ajax_rhw_calculate_quote', array( $this, 'handle_live_calculation' ) );
 		add_action( 'wp_ajax_nopriv_rhw_calculate_quote', array( $this, 'handle_live_calculation' ) );
+
+		add_action( 'wp_ajax_rhw_get_available_slots', array( $this, 'handle_get_available_slots' ) );
+		add_action( 'wp_ajax_nopriv_rhw_get_available_slots', array( $this, 'handle_get_available_slots' ) );
+	}
+
+	/**
+	 * Retrieve live available consultation time slots synced with team calendar (Item 9)
+	 */
+	public function handle_get_available_slots() {
+		check_ajax_referer( 'rhw_calculator_nonce', 'nonce' );
+
+		$date = isset( $_GET['date'] ) ? sanitize_text_field( wp_unslash( $_GET['date'] ) ) : '';
+		if ( empty( $date ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Please select a valid date.', 'rhw-calculator' ) ) );
+		}
+
+		// Prevent booking in the past
+		if ( strtotime( $date ) < strtotime( date( 'Y-m-d' ) ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Consultations cannot be scheduled on past dates.', 'rhw-calculator' ) ) );
+		}
+
+		// Closed on Sundays
+		$day_of_week = (int) date( 'w', strtotime( $date ) ); // 0 = Sunday
+		if ( 0 === $day_of_week ) {
+			wp_send_json_success( array(
+				'date'    => $date,
+				'slots'   => array(),
+				'message' => esc_html__( 'Sundays are reserved for weddings on the estate. Please select Monday through Saturday.', 'rhw-calculator' ),
+			) );
+		}
+
+		$all_slots = array(
+			'09:00 AM',
+			'10:00 AM',
+			'11:00 AM',
+			'01:00 PM',
+			'02:00 PM',
+			'03:00 PM',
+			'04:00 PM',
+		);
+
+		global $wpdb;
+		RHW_Activator::ensure_bookings_table_exists();
+		$bookings_table = $wpdb->prefix . 'rhw_bookings';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$booked = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT booking_time FROM {$bookings_table} WHERE booking_date = %s AND status IN ('confirmed', 'blocked')",
+				$date
+			)
+		);
+
+		$is_all_day_blocked = in_array( 'all_day', (array) $booked, true );
+
+		$slots = array();
+		foreach ( $all_slots as $slot ) {
+			$available = ! $is_all_day_blocked && ! in_array( $slot, (array) $booked, true );
+			$slots[]   = array(
+				'time'      => $slot,
+				'available' => $available,
+			);
+		}
+
+		wp_send_json_success( array(
+			'date'  => $date,
+			'slots' => $slots,
+		) );
 	}
 
 	/**
@@ -190,19 +258,66 @@ class RHW_Submission_Handler {
 
 		$submission_id = $wpdb->insert_id;
 
+		// Consultation Slot Booking & Google Calendar Sync (Item 9)
+		$consultation_date = isset( $_POST['consultation_date'] ) ? sanitize_text_field( wp_unslash( $_POST['consultation_date'] ) ) : '';
+		$consultation_time = isset( $_POST['consultation_time'] ) ? sanitize_text_field( wp_unslash( $_POST['consultation_time'] ) ) : '';
+		$gcal_link         = '';
+
+		if ( ! empty( $consultation_date ) && ! empty( $consultation_time ) ) {
+			RHW_Activator::ensure_bookings_table_exists();
+			$bookings_table = $wpdb->prefix . 'rhw_bookings';
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->insert(
+				$bookings_table,
+				array(
+					'submission_id'  => $submission_id,
+					'customer_name'  => $customer_name,
+					'customer_email' => $customer_email,
+					'customer_phone' => $customer_phone,
+					'booking_date'   => $consultation_date,
+					'booking_time'   => $consultation_time,
+					'booking_type'   => 'consultation',
+					'notes'          => sprintf( 'Lead quote #%d: $%s (%s)', $submission_id, number_format( $calc['grand_total'], 2 ), $venue_selection ),
+					'status'         => 'confirmed',
+					'created_at'     => current_time( 'mysql' ),
+				),
+				array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			);
+
+			$submission_data['consultation_date'] = $consultation_date;
+			$submission_data['consultation_time'] = $consultation_time;
+
+			// Generate Google Calendar Link
+			$start_timestamp = strtotime( $consultation_date . ' ' . $consultation_time );
+			if ( $start_timestamp ) {
+				$end_timestamp = $start_timestamp + ( 45 * 60 ); // 45-minute consultation
+				$start_iso     = gmdate( 'Ymd\THis\Z', $start_timestamp );
+				$end_iso       = gmdate( 'Ymd\THis\Z', $end_timestamp );
+				$gcal_title    = rawurlencode( 'Rose Hall Wedding Consultation: ' . $customer_name );
+				$gcal_details  = rawurlencode( sprintf( "Wedding & Event Consultation with Rose Hall specialist.\nQuote ID: #%d\nEstimated Investment: %s\nCustomer: %s (%s, %s)", $submission_id, $calc['formatted']['grand_total'], $customer_name, $customer_email, $customer_phone ) );
+				$gcal_loc      = rawurlencode( 'Rose Hall Weddings & Events (Phone / Google Meet), Montego Bay, Jamaica' );
+				$gcal_link     = "https://calendar.google.com/calendar/render?action=TEMPLATE&text={$gcal_title}&dates={$start_iso}/{$end_iso}&details={$gcal_details}&location={$gcal_loc}";
+				$submission_data['gcal_link'] = $gcal_link;
+			}
+		}
+
 		// 9. Send Notification Emails
 		RHW_Email::send_admin_notification( $submission_id, $submission_data, $form, $calc );
 		RHW_Email::send_customer_confirmation( $submission_id, $submission_data, $form, $calc );
 
 		// 10. Return Success Response
 		wp_send_json_success( array(
-			'submission_id'   => $submission_id,
-			'customer_name'   => $customer_name,
-			'customer_email'  => $customer_email,
-			'event_date'      => $event_date_comb,
-			'guest_count'     => $calc['guest_count'],
-			'grand_total'     => $calc['formatted']['grand_total'],
-			'message'         => esc_html__( 'Thank you! Your wedding consultation request and estimated cost have been submitted. Our Destination Relationship Specialists will contact you within 3 to 5 business days.', 'rhw-calculator' ),
+			'submission_id'     => $submission_id,
+			'customer_name'     => $customer_name,
+			'customer_email'    => $customer_email,
+			'event_date'        => $event_date_comb,
+			'consultation_date' => $consultation_date,
+			'consultation_time' => $consultation_time,
+			'gcal_link'         => $gcal_link,
+			'guest_count'       => $calc['guest_count'],
+			'grand_total'       => $calc['formatted']['grand_total'],
+			'message'           => esc_html__( 'Thank you! Your consultation request was sent! Our Destination Relationship Specialists will connect with you at your chosen appointment time.', 'rhw-calculator' ),
 		) );
 	}
 

@@ -29,6 +29,43 @@ $primary_color = ! empty( $appearance['primary_color'] ) ? $appearance['primary_
 $accent_color  = ! empty( $appearance['accent_color'] ) ? $appearance['accent_color'] : '#C5A059';
 $bg_color      = ! empty( $appearance['background_color'] ) ? $appearance['background_color'] : '#FDFBF7';
 $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_radius'] : '8px';
+
+if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
+	/**
+	 * Convert URLs in text to clickable links with target="_blank"
+	 *
+	 * @param string $text Plain or HTML text.
+	 * @return string Sanitized HTML with clickable links.
+	 */
+	function rhw_format_clickable_text( $text ) {
+		if ( empty( $text ) ) {
+			return '';
+		}
+		// Convert bare URLs into links
+		$text = make_clickable( $text );
+		// Ensure target="_blank" and rel="noopener noreferrer"
+		$text = preg_replace( '/<a\s+(?!.*?target=)([^>]+)>/i', '<a target="_blank" rel="noopener noreferrer" $1>', $text );
+		$text = preg_replace( '/target=[\'"][^\'"]*[\'"]/i', 'target="_blank" rel="noopener noreferrer"', $text );
+		return wp_kses(
+			$text,
+			array(
+				'a'      => array(
+					'href'   => array(),
+					'title'  => array(),
+					'target' => array(),
+					'rel'    => array(),
+					'class'  => array(),
+				),
+				'strong' => array(),
+				'b'      => array(),
+				'em'     => array(),
+				'i'      => array(),
+				'span'   => array( 'class' => array() ),
+				'br'     => array(),
+			)
+		);
+	}
+}
 ?>
 
 <div id="rhw-calc-container-<?php echo esc_attr( $form_id ); ?>"
@@ -87,7 +124,7 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 									$sec_desc = __( 'Tell us about your upcoming event date, guest count, preferred venue, décor, etc.', 'rhw-calculator' );
 								}
 								?>
-								<p class="rhw-step-subheading"><?php echo esc_html( $sec_desc ); ?></p>
+								<p class="rhw-step-subheading"><?php echo rhw_format_clickable_text( $sec_desc ); ?></p>
 							<?php endif; ?>
 						</div>
 
@@ -122,7 +159,7 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 									</label>
 
 									<?php if ( ! empty( $q['help_text'] ) ) : ?>
-										<div class="rhw-field-help"><?php echo esc_html( $q['help_text'] ); ?></div>
+										<div class="rhw-field-help"><?php echo rhw_format_clickable_text( $q['help_text'] ); ?></div>
 									<?php endif; ?>
 
 									<!-- Date & Time Picker (Weekday / Weekend) all-in-one -->
@@ -299,6 +336,23 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 											<?php endif; ?>
 										</div>
 
+									<!-- Country Select Dropdown (Item 8) -->
+									<?php elseif ( 'country' === $q['type'] || 'lead_country' === $qid ) : ?>
+										<select name="<?php echo $qid; ?>"
+										        id="rhw_field_<?php echo $qid; ?>"
+										        class="rhw-select-input rhw-country-select"
+										        <?php echo $is_req ? 'required' : ''; ?>>
+											<option value="">-- <?php esc_html_e( 'Select Country of Residence', 'rhw-calculator' ); ?> --</option>
+											<?php
+											$country_list = class_exists( 'RHW_Form_Manager' ) ? RHW_Form_Manager::get_countries_list() : array();
+											foreach ( $country_list as $c_code => $c_name ) :
+											?>
+												<option value="<?php echo esc_attr( $c_name ); ?>">
+													<?php echo esc_html( $c_name ); ?>
+												</option>
+											<?php endforeach; ?>
+										</select>
+
 									<!-- Select Dropdown with "Other" Support -->
 									<?php elseif ( 'select' === $q['type'] ) : ?>
 										<select name="<?php echo $qid; ?>"
@@ -361,6 +415,52 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 							<?php endforeach; ?>
 						</div>
 
+						<?php if ( $s_idx === count( $sections ) - 1 ) : ?>
+							<!-- Google Calendar Synced Consultation Scheduler (Item 9) -->
+							<div class="rhw-consultation-booking-card" style="margin-top: 24px; padding: 20px; background: #FAF7F2; border: 1px solid #E5DCD1; border-radius: 8px;">
+								<div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px;">
+									<span class="dashicons dashicons-calendar-alt" style="font-size: 24px; width: 24px; height: 24px; color: var(--rhw-primary); margin-top: 2px;"></span>
+									<div>
+										<h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--rhw-primary);"><?php esc_html_e( 'Schedule Your Wedding Consultation Call', 'rhw-calculator' ); ?></h4>
+										<p style="margin: 3px 0 0; font-size: 13px; color: #666; line-height: 1.4;"><?php esc_html_e( 'Select a date and available time slot to meet with a Rose Hall Wedding Specialist via Phone or Google Meet.', 'rhw-calculator' ); ?></p>
+									</div>
+								</div>
+
+								<div class="rhw-consultation-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+									<div>
+										<label class="rhw-field-label" for="rhw_consultation_date">
+											<?php esc_html_e( 'Preferred Meeting Date', 'rhw-calculator' ); ?>
+										</label>
+										<input type="date"
+										       id="rhw_consultation_date"
+										       name="consultation_date"
+										       class="rhw-text-input rhw-consultation-date-input"
+										       min="<?php echo esc_attr( date( 'Y-m-d', strtotime( '+1 day' ) ) ); ?>"
+										       value="<?php echo esc_attr( date( 'Y-m-d', strtotime( '+2 days' ) ) ); ?>">
+										<small style="color: #777; font-size: 11px; display: block; margin-top: 4px;"><?php esc_html_e( 'Consultations available Monday &ndash; Saturday', 'rhw-calculator' ); ?></small>
+									</div>
+									<div>
+										<label class="rhw-field-label">
+											<?php esc_html_e( 'Available Time Slots (Live Calendar Sync)', 'rhw-calculator' ); ?>
+										</label>
+										<div class="rhw-slots-container" id="rhw-slots-container">
+											<div class="rhw-slots-loading" style="padding: 8px 0; font-size: 12px; color: #666;">
+												<span class="dashicons dashicons-update rhw-spin"></span> <?php esc_html_e( 'Checking live team calendar...', 'rhw-calculator' ); ?>
+											</div>
+										</div>
+										<input type="hidden" name="consultation_time" id="rhw_consultation_time" value="">
+									</div>
+								</div>
+
+								<div class="rhw-selected-slot-preview" style="display: none; margin-top: 14px; padding: 10px 14px; background: #FFFDF9; border: 1px solid #D6B98D; border-radius: 6px; font-size: 13px; color: #8A5D19;">
+									<span class="dashicons dashicons-clock" style="vertical-align: middle; margin-right: 4px;"></span>
+									<strong><?php esc_html_e( 'Selected Consultation Slot:', 'rhw-calculator' ); ?></strong>
+									<span class="rhw-selected-slot-text"></span>
+									<span style="font-size: 11px; margin-left: 8px; color: #555;"><?php esc_html_e( '(A Google Calendar invitation link will be provided upon submitting)', 'rhw-calculator' ); ?></span>
+								</div>
+							</div>
+						<?php endif; ?>
+
 						<!-- Wizard Navigation Buttons -->
 						<div class="rhw-wizard-buttons">
 							<?php if ( $s_idx > 0 ) : ?>
@@ -394,7 +494,7 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 							<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
 						</svg>
 					</div>
-					<h3 class="rhw-success-heading"><?php esc_html_e( 'Your Wedding Consultation Request is Received!', 'rhw-calculator' ); ?></h3>
+					<h3 class="rhw-success-heading"><?php esc_html_e( 'Your Consultation Request was Sent!', 'rhw-calculator' ); ?></h3>
 					<p class="rhw-success-lead">
 						<?php esc_html_e( 'Thank you, ', 'rhw-calculator' ); ?><strong class="rhw-lead-name-text"></strong>!
 						<?php esc_html_e( 'A preliminary quote has been generated and dispatched to your email.', 'rhw-calculator' ); ?>
@@ -413,6 +513,16 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 							<span><?php esc_html_e( 'Estimated Cost:', 'rhw-calculator' ); ?></span>
 							<strong class="rhw-lead-total-text"></strong>
 						</div>
+						<div class="rhw-success-sum-row rhw-success-consultation-row" style="display:none;">
+							<span><?php esc_html_e( 'Consultation Appointment:', 'rhw-calculator' ); ?></span>
+							<strong class="rhw-lead-consultation-text"></strong>
+						</div>
+					</div>
+
+					<div class="rhw-gcal-sync-wrap" style="display:none; margin: 18px 0; text-align: center;">
+						<a href="#" target="_blank" rel="noopener noreferrer" class="button button-primary rhw-btn-gcal" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 12px 22px; font-weight: 700; font-size: 14px; border-radius: 6px; background: #4285F4; color: #ffffff; border: none; box-shadow: 0 2px 6px rgba(66, 133, 244, 0.3);">
+							<span class="dashicons dashicons-calendar-alt"></span> <?php esc_html_e( 'Add Appointment to Google Calendar', 'rhw-calculator' ); ?>
+						</a>
 					</div>
 
 					<div class="rhw-next-steps-box">

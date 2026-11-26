@@ -342,6 +342,13 @@
 	background: #F4EFEB;
 }
 
+.rhw-file-dropzone.rhw-drag-over {
+	border-color: var(--rhw-primary);
+	background: #F2ECE6;
+	box-shadow: 0 0 0 3px rgba(139, 44, 46, 0.18);
+	transform: scale(1.01);
+}
+
 .rhw-upload-icon {
 	width: 32px;
 	height: 32px;
@@ -480,13 +487,16 @@
 
 .rhw-checkbox-tile input:checked ~ .rhw-choice-indicator::after {
 	content: '';
-	width: 8px;
-	height: 8px;
+	width: 6px;
+	height: 6px;
 	background: #ffffff;
-	border-radius: 2px;
 	border: none;
-	transform: none;
-	margin: 0;
+	transform: rotate(0deg);
+	border-radius: 1px;
+	margin-bottom: 0;
+	margin-top: 0;
+	margin-left: 0;
+	margin-right: 0;
 }
 
 .rhw-choice-tile input:checked ~ .rhw-choice-text {
@@ -663,10 +673,40 @@
 
 /* Sticky Live Cost Sidebar (Requirement 6) */
 .rhw-calc-sidebar {
+	position: -webkit-sticky;
 	position: sticky;
-	top: var(--rhw-sticky-top, 165px); /* Accommodates 80px static menu + 69px alert banner + buffer */
+	top: var(--rhw-sticky-top, 165px) !important; /* Accommodates 80px static menu + 69px alert banner + buffer */
 	align-self: flex-start;
-	z-index: 99;
+	z-index: 990 !important;
+}
+
+.rhw-calc-sidebar.rhw-sidebar-fixed {
+	position: fixed !important;
+	z-index: 9999 !important;
+	box-sizing: border-box;
+}
+
+.rhw-calc-sidebar.rhw-sidebar-bottom {
+	position: absolute !important;
+	bottom: 0 !important;
+	top: auto !important;
+	z-index: 999 !important;
+	box-sizing: border-box;
+}
+
+/* Clickable Links in Subtitles & Help Text */
+.rhw-step-subheading a,
+.rhw-field-help a {
+	color: var(--rhw-primary);
+	text-decoration: underline;
+	font-weight: 500;
+	word-break: break-word;
+	transition: opacity 0.2s ease;
+}
+
+.rhw-step-subheading a:hover,
+.rhw-field-help a:hover {
+	opacity: 0.8;
 }
 
 .rhw-sticky-card {
@@ -913,6 +953,69 @@
 	margin: 0 0 6px 0;
 	color: var(--rhw-primary);
 	font-size: 14px;
+}
+
+/* Consultation Booking Scheduler & Google Calendar (Item 9) */
+.rhw-slots-container {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 4px;
+	min-height: 40px;
+}
+
+.rhw-slot-pill {
+	display: inline-block;
+	padding: 8px 12px;
+	background: #ffffff;
+	border: 1px solid #D4C9BC;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--rhw-text);
+	cursor: pointer;
+	transition: all 0.2s ease;
+	text-align: center;
+	line-height: 1;
+}
+
+.rhw-slot-pill:hover:not(.disabled) {
+	border-color: var(--rhw-primary);
+	background: #FAF7F2;
+	color: var(--rhw-primary);
+}
+
+.rhw-slot-pill.active {
+	background: var(--rhw-primary) !important;
+	border-color: var(--rhw-primary) !important;
+	color: #ffffff !important;
+	box-shadow: 0 2px 6px rgba(123, 17, 45, 0.25);
+}
+
+.rhw-slot-pill.disabled {
+	background: #F1F1F1;
+	border-color: #E2E2E2;
+	color: #A0A0A0;
+	cursor: not-allowed;
+	text-decoration: line-through;
+	opacity: 0.65;
+}
+
+.rhw-btn-gcal {
+	transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.rhw-btn-gcal:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(66, 133, 244, 0.35);
+}
+
+@keyframes rhwSpin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+.rhw-spin {
+	display: inline-block;
+	animation: rhwSpin 1.2s infinite linear;
 }
 
 /* Mobile Sticky Bottom Bar */

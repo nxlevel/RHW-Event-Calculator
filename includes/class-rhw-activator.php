@@ -79,6 +79,9 @@ class RHW_Activator {
 		) {$charset_collate};";
 		dbDelta( $sql_submissions );
 
+		// Bookings table (Requirement 9: Google Calendar Synced Consultations & Time Slot Blocking)
+		self::ensure_bookings_table_exists();
+
 		// Check if we need to seed the default Rose Hall Form
 		$form_count = $wpdb->get_var( "SELECT COUNT(*) FROM {$forms_table}" );
 		if ( 0 === (int) $form_count ) {
@@ -142,5 +145,35 @@ class RHW_Activator {
 
 		$new_id = $wpdb->insert_id;
 		update_option( 'rhw_default_form_id', $new_id );
+	}
+
+	/**
+	 * Ensure wp_rhw_bookings table exists (Item 9)
+	 */
+	public static function ensure_bookings_table_exists() {
+		global $wpdb;
+
+		$charset_collate = $wpdb->get_charset_collate();
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+		$bookings_table = $wpdb->prefix . 'rhw_bookings';
+		$sql_bookings   = "CREATE TABLE {$bookings_table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			submission_id bigint(20) unsigned DEFAULT NULL,
+			customer_name varchar(255) NOT NULL,
+			customer_email varchar(255) NOT NULL,
+			customer_phone varchar(100) DEFAULT '',
+			booking_date date NOT NULL,
+			booking_time varchar(50) NOT NULL,
+			booking_type varchar(50) NOT NULL DEFAULT 'consultation',
+			notes text DEFAULT NULL,
+			status varchar(50) NOT NULL DEFAULT 'confirmed',
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY booking_date (booking_date),
+			KEY booking_slot (booking_date, booking_time),
+			KEY status (status)
+		) {$charset_collate};";
+		dbDelta( $sql_bookings );
 	}
 }

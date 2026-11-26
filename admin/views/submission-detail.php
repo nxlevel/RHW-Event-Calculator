@@ -151,6 +151,17 @@ $form      = RHW_Form_Manager::get_form( $submission['form_id'] );
 					<li><strong><?php esc_html_e( 'Phone / WhatsApp:', 'rhw-calculator' ); ?></strong> <?php echo esc_html( $submission['customer_phone'] ); ?></li>
 					<li><strong><?php esc_html_e( 'Country:', 'rhw-calculator' ); ?></strong> <?php echo esc_html( $submission['country_of_residence'] ); ?></li>
 					<li><strong><?php esc_html_e( 'Event Date:', 'rhw-calculator' ); ?></strong> <?php echo esc_html( $submission['event_date'] ); ?></li>
+					<?php
+					global $wpdb;
+					$rhw_bk = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}rhw_bookings WHERE submission_id = %d LIMIT 1", $submission['id'] ) );
+					if ( $rhw_bk ) :
+					?>
+						<li style="background: #FAF5EB; padding: 6px 8px; border-radius: 4px; margin: 4px 0;">
+							<strong><?php esc_html_e( 'Booked Consultation:', 'rhw-calculator' ); ?></strong>
+							<span style="color: #7B112D; font-weight: 700;"><?php echo esc_html( date( 'D, M j, Y', strtotime( $rhw_bk->booking_date ) ) . ' at ' . $rhw_bk->booking_time ); ?></span>
+							<br><a href="<?php echo esc_url( admin_url( 'admin.php?page=rhw-calculator-calendar' ) ); ?>" style="font-size: 11px;">View in Calendar &rarr;</a>
+						</li>
+					<?php endif; ?>
 					<li><strong><?php esc_html_e( 'Guest Count:', 'rhw-calculator' ); ?></strong> <?php echo esc_html( $submission['guest_count'] ); ?></li>
 					<li><strong><?php esc_html_e( 'Submitted:', 'rhw-calculator' ); ?></strong> <?php echo esc_html( $submission['created_at'] ); ?></li>
 					<li><strong><?php esc_html_e( 'IP Address:', 'rhw-calculator' ); ?></strong> <?php echo esc_html( $submission['user_ip'] ); ?></li>

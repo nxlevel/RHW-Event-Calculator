@@ -23,6 +23,8 @@ class RHW_Admin {
 		add_action( 'admin_post_rhw_save_settings', array( $this, 'handle_save_settings' ) );
 		add_action( 'admin_post_rhw_update_submission_status', array( $this, 'handle_update_submission_status' ) );
 		add_action( 'admin_post_rhw_delete_submission', array( $this, 'handle_delete_submission' ) );
+		add_action( 'admin_post_rhw_block_slot', array( $this, 'handle_block_slot' ) );
+		add_action( 'admin_post_rhw_delete_booking', array( $this, 'handle_delete_booking' ) );
 	}
 
 	/**
@@ -64,6 +66,15 @@ class RHW_Admin {
 			'manage_options',
 			'rhw-calculator-submissions',
 			array( $this, 'render_submissions_page' )
+		);
+
+		add_submenu_page(
+			'rhw-calculator',
+			__( 'Consultations Calendar', 'rhw-calculator' ),
+			__( 'Calendar & Bookings', 'rhw-calculator' ),
+			'manage_options',
+			'rhw-calculator-calendar',
+			array( $this, 'render_calendar_page' )
 		);
 
 		add_submenu_page(
@@ -326,6 +337,79 @@ class RHW_Admin {
 		$wpdb->delete( $table, array( 'id' => $id ), array( '%d' ) );
 
 		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-submissions&deleted=1' ) );
+		exit;
+	}
+
+	/**
+	 * Render Consultations Calendar page (Item 9)
+	 */
+	public function render_calendar_page() {
+		RHW_Activator::ensure_bookings_table_exists();
+		include RHW_CALCULATOR_PLUGIN_DIR . 'admin/views/calendar.php';
+	}
+
+	/**
+	 * Handle admin manually blocking a date/time slot.
+	 */
+	public function handle_block_slot() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized request.', 'rhw-calculator' ) );
+		}
+
+		check_admin_referer( 'rhw_block_time_slot' );
+
+		$date  = isset( $_POST['block_date'] ) ? sanitize_text_field( wp_unslash( $_POST['block_date'] ) ) : '';
+		$time  = isset( $_POST['block_time'] ) ? sanitize_text_field( wp_unslash( $_POST['block_time'] ) ) : '';
+		$notes = isset( $_POST['block_notes'] ) ? sanitize_text_field( wp_unslash( $_POST['block_notes'] ) ) : 'Blocked by Admin';
+
+		if ( empty( $date ) || empty( $time ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&error=missing_fields' ) );
+			exit;
+		}
+
+		global $wpdb;
+		RHW_Activator::ensure_bookings_table_exists();
+		$bookings_table = $wpdb->prefix . 'rhw_bookings';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->insert(
+			$bookings_table,
+			array(
+				'submission_id'  => null,
+				'customer_name'  => 'Admin Blocked Slot',
+				'customer_email' => get_option( 'admin_email' ),
+				'customer_phone' => '',
+				'booking_date'   => $date,
+				'booking_time'   => $time,
+				'booking_type'   => 'blocked_admin',
+				'notes'          => $notes,
+				'status'         => 'blocked',
+				'created_at'     => current_time( 'mysql' ),
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+		);
+
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&blocked=1' ) );
+		exit;
+	}
+
+	/**
+	 * Handle admin deleting/unblocking a booking.
+	 */
+	public function handle_delete_booking() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized request.', 'rhw-calculator' ) );
+		}
+
+		$id = isset( $_GET['id'] ) ? intval( $_GET['id'] ) : 0;
+		check_admin_referer( 'rhw_delete_booking_' . $id );
+
+		global $wpdb;
+		$bookings_table = $wpdb->prefix . 'rhw_bookings';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->delete( $bookings_table, array( 'id' => $id ), array( '%d' ) );
+
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&unblocked=1' ) );
 		exit;
 	}
 }

@@ -173,9 +173,9 @@ class RHW_Pricing_Engine {
 			}
 		}
 
-		// 4. Automated Décor & Rental Requirements for Full Service (as shown in the real quote)
-		if ( ! $is_venue_only && 'full_service' === $service_type ) {
-			self::apply_standard_full_service_rentals( $answers, $guest_count, $line_items, $subtotal, $currency_symbol, $currency_position );
+		// 4. Automated Décor & Rental Requirements based on user opt-in (Item 3)
+		if ( ! $is_venue_only ) {
+			self::apply_standard_full_service_rentals( $answers, $guest_count, $line_items, $subtotal, $currency_symbol, $currency_position, $service_type );
 		}
 
 		// 5. Calculate Taxes and Service Charges
@@ -312,13 +312,15 @@ class RHW_Pricing_Engine {
 	/**
 	 * Apply standard decor & rental items for full service weddings as quoted in the Rose Hall standard proposal.
 	 */
-	private static function apply_standard_full_service_rentals( $answers, $guest_count, &$line_items, &$subtotal, $symbol, $pos ) {
-		$include_decor = isset( $answers['include_standard_decor'] ) ? ( 'yes' === $answers['include_standard_decor'] || '1' === (string) $answers['include_standard_decor'] ) : true;
+	private static function apply_standard_full_service_rentals( $answers, $guest_count, &$line_items, &$subtotal, $symbol, $pos, $service_type = '' ) {
+		// Only include when explicitly selected as 'yes' (Item 3)
+		$include_decor = isset( $answers['include_standard_decor'] ) && ( 'yes' === $answers['include_standard_decor'] || '1' === (string) $answers['include_standard_decor'] );
 
 		if ( ! $include_decor ) {
 			return;
 		}
 
+		$is_elopement  = ( 'elopement' === $service_type || false !== stripos( (string) $service_type, 'elopement' ) );
 		$existing_keys = wp_list_pluck( $line_items, 'key' );
 
 		// 1. Gold Chiavari Chairs / Ivory Cushions ($7.00 per guest)
@@ -350,6 +352,11 @@ class RHW_Pricing_Engine {
 				'note'       => 'Flat fee',
 			);
 			$subtotal    += 45.00;
+		}
+
+		// For Elopement (Ceremony only up to 20 guests for 2 hrs): do NOT add dining reception tables/settings
+		if ( $is_elopement ) {
+			return;
 		}
 
 		// 3. Cocktail Bistro Tables with Linen ($55.00 each, 1 per 15 guests)
