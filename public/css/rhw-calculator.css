@@ -673,25 +673,14 @@
 
 /* Sticky Live Cost Sidebar (Requirement 6) */
 .rhw-calc-sidebar {
-	position: -webkit-sticky;
-	position: sticky;
+	position: -webkit-sticky !important;
+	position: sticky !important;
 	top: var(--rhw-sticky-top, 165px) !important; /* Accommodates 80px static menu + 69px alert banner + buffer */
-	align-self: flex-start;
-	z-index: 990 !important;
-}
-
-.rhw-calc-sidebar.rhw-sidebar-fixed {
-	position: fixed !important;
-	z-index: 9999 !important;
+	align-self: start;
+	width: 100%;
+	min-width: 0;
 	box-sizing: border-box;
-}
-
-.rhw-calc-sidebar.rhw-sidebar-bottom {
-	position: absolute !important;
-	bottom: 0 !important;
-	top: auto !important;
-	z-index: 999 !important;
-	box-sizing: border-box;
+	z-index: 90 !important;
 }
 
 /* Clickable Links in Subtitles & Help Text */
@@ -1036,6 +1025,10 @@
 }
 
 @media (max-width: 899px) {
+	.rhw-calc-sidebar {
+		position: static !important;
+		top: auto !important;
+	}
 	.rhw-mobile-summary-bar {
 		display: flex;
 	}

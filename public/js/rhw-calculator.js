@@ -65,77 +65,46 @@
 		$(window).on('resize scroll', updateStickyTopOffset);
 
 		/**
-		 * Fail-Safe Sticky Sidebar Scroll Controller (Fixes Fixed Header Menu & Alert Banner overlapping)
+		 * Ensure CSS position: sticky works cleanly without altering sidebar default width.
+		 * Replaces ancestor overflow: hidden with overflow-x: clip / overflow-y: visible
+		 * because any ancestor with overflow: hidden disables browser native sticky positioning.
 		 */
-		function initStickySidebarController() {
+		function ensureNativeStickyAncestors() {
 			const $sidebar = $wrapper.find('.rhw-calc-sidebar');
-			const $grid = $wrapper.find('.rhw-calc-grid');
-			if (!$sidebar.length || !$grid.length) return;
+			if (!$sidebar.length) return;
 
-			function handleScroll() {
-				if (window.innerWidth <= 992) {
-					$sidebar.removeClass('rhw-sidebar-fixed rhw-sidebar-bottom').css({
-						position: '',
-						top: '',
-						left: '',
-						width: ''
-					});
-					return;
-				}
+			// Ensure no stale inline position/width/left overrides exist
+			$sidebar.removeClass('rhw-sidebar-fixed rhw-sidebar-bottom').css({
+				position: '',
+				top: '',
+				left: '',
+				bottom: '',
+				width: ''
+			});
 
-				let topOffset = 165; // 80px static menu + 69px alert banner + buffer
-				if ($('#wpadminbar').length && $('#wpadminbar').is(':visible')) {
-					topOffset += $('#wpadminbar').outerHeight() || 32;
-				}
+			const xClipVal = (window.CSS && window.CSS.supports && window.CSS.supports('overflow-x', 'clip')) ? 'clip' : 'visible';
+			let el = $sidebar[0].parentElement;
+			while (el) {
+				const style = window.getComputedStyle(el);
+				const tag = el.tagName ? el.tagName.toLowerCase() : '';
 
-				const gridEl = $grid[0];
-				const sidebarEl = $sidebar[0];
-				if (!gridEl || !sidebarEl) return;
-
-				const gridRect = gridEl.getBoundingClientRect();
-				const parentCol = $sidebar.parent()[0];
-				const parentRect = parentCol ? parentCol.getBoundingClientRect() : gridRect;
-				const sidebarWidth = parentRect.width;
-				const sidebarHeight = $sidebar.outerHeight();
-				const gridBottom = gridRect.bottom;
-				const gridTop = gridRect.top;
-
-				if (gridTop <= topOffset) {
-					if (gridBottom <= (topOffset + sidebarHeight + 20)) {
-						// Clamp to bottom of grid
-						$sidebar.removeClass('rhw-sidebar-fixed').addClass('rhw-sidebar-bottom').css({
-							position: 'absolute',
-							top: 'auto',
-							bottom: '0',
-							left: 'auto',
-							width: sidebarWidth + 'px'
-						});
-					} else {
-						// Float fixed below the fixed header menu & alert banner
-						$sidebar.removeClass('rhw-sidebar-bottom').addClass('rhw-sidebar-fixed').css({
-							position: 'fixed',
-							top: topOffset + 'px',
-							left: parentRect.left + 'px',
-							bottom: 'auto',
-							width: sidebarWidth + 'px'
-						});
+				if (tag !== 'body' && tag !== 'html') {
+					if (style.overflowY === 'hidden' || style.overflowY === 'auto' || style.overflowY === 'scroll') {
+						el.style.setProperty('overflow-y', 'visible', 'important');
 					}
-				} else {
-					// Above the grid top - standard flow
-					$sidebar.removeClass('rhw-sidebar-fixed rhw-sidebar-bottom').css({
-						position: '',
-						top: '',
-						left: '',
-						width: ''
-					});
+					if (style.overflowX === 'hidden' || style.overflowX === 'auto' || style.overflowX === 'scroll') {
+						el.style.setProperty('overflow-x', xClipVal, 'important');
+					}
+				} else if (tag === 'body' || tag === 'html') {
+					if (style.overflowX === 'hidden') {
+						el.style.setProperty('overflow-x', xClipVal, 'important');
+					}
 				}
-			}
 
-			$(window).on('scroll resize', handleScroll);
-			$wrapper.on('rhw:recalc rhw:step_changed', handleScroll);
-			setTimeout(handleScroll, 150);
+				el = el.parentElement;
+			}
 		}
-		initStickySidebarController();
+		ensureNativeStickyAncestors();
 
 		// Initial setup
 		initNumberSteppers();
