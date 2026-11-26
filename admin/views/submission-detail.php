@@ -42,6 +42,7 @@ $form      = RHW_Form_Manager::get_form( $submission['form_id'] );
 			</a>
 		</div>
 	</div>
+	<hr class="wp-header-end">
 
 	<?php if ( isset( $_GET['status_updated'] ) ) : ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Lead status and notes updated.', 'rhw-calculator' ); ?></p></div>

@@ -83,6 +83,32 @@ class RHW_Activator {
 		$form_count = $wpdb->get_var( "SELECT COUNT(*) FROM {$forms_table}" );
 		if ( 0 === (int) $form_count ) {
 			self::seed_default_form();
+		} else {
+			// Update legacy section description in existing forms
+			$existing_forms = $wpdb->get_results( "SELECT id, sections FROM {$forms_table}" );
+			if ( $existing_forms ) {
+				foreach ( $existing_forms as $f ) {
+					$secs = json_decode( $f->sections, true );
+					if ( is_array( $secs ) ) {
+						$updated_secs = false;
+						foreach ( $secs as &$sec_item ) {
+							if ( isset( $sec_item['id'] ) && 'sec_event' === $sec_item['id'] ) {
+								$sec_item['description'] = 'Tell us about your upcoming event date, guest count, preferred venue, décor, etc.';
+								$updated_secs = true;
+							}
+						}
+						if ( $updated_secs ) {
+							$wpdb->update(
+								$forms_table,
+								array( 'sections' => wp_json_encode( $secs ) ),
+								array( 'id' => $f->id ),
+								array( '%s' ),
+								array( '%d' )
+							);
+						}
+					}
+				}
+			}
 		}
 
 		update_option( 'rhw_calculator_version', RHW_CALCULATOR_VERSION );

@@ -20,6 +20,17 @@
 			renderSectionsAndQuestions();
 		}
 
+		// Ensure WP notifications are positioned between header bar and plugin content
+		function repositionNotices() {
+			const $notices = $('.rhw-header-bar').find('.notice, div.updated, div.error');
+			if ($notices.length) {
+				$notices.insertAfter('.rhw-header-bar');
+			}
+		}
+		repositionNotices();
+		setTimeout(repositionNotices, 50);
+		setTimeout(repositionNotices, 300);
+
 		initClipboard();
 		initTabs();
 		initEventListeners();
@@ -219,6 +230,7 @@
 								<option value="radio" ${q.type === 'radio' ? 'selected' : ''}>Radio Buttons</option>
 								<option value="checkboxes" ${q.type === 'checkboxes' || q.type === 'checkbox' ? 'selected' : ''}>Checkboxes</option>
 								<option value="select" ${q.type === 'select' ? 'selected' : ''}>Dropdown Select</option>
+								<option value="datetime" ${q.type === 'datetime' ? 'selected' : ''}>Date & Time Picker (Weekday/Weekend)</option>
 								<option value="date" ${q.type === 'date' ? 'selected' : ''}>Date Picker (Weekday/Weekend)</option>
 								<option value="time" ${q.type === 'time' ? 'selected' : ''}>Time Picker</option>
 								<option value="file" ${q.type === 'file' ? 'selected' : ''}>Image / File Upload</option>
@@ -354,7 +366,7 @@
 			renderSectionsAndQuestions();
 		});
 
-		$card.find('.rhw-question-header, .rhw-toggle-q-btn').on('click', function(e) {
+		$card.find('.rhw-question-header').on('click', function(e) {
 			if ($(e.target).closest('.rhw-del-q-btn').length || $(e.target).hasClass('rhw-q-drag-handle')) {
 				return;
 			}

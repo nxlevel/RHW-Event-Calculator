@@ -17,7 +17,7 @@ $submissions_table = $wpdb->prefix . 'rhw_submissions';
 	<div class="rhw-header-bar">
 		<div>
 			<h1 class="wp-heading-inline"><?php esc_html_e( 'Event Cost Calculators', 'rhw-calculator' ); ?></h1>
-			<p class="rhw-header-subtitle"><?php esc_html_e( 'Manage your interactive wedding & event cost calculators and shortcodes.', 'rhw-calculator' ); ?></p>
+			<p class="rhw-header-subtitle"><?php esc_html_e( 'Manage your wedding & event cost calculators.', 'rhw-calculator' ); ?></p>
 		</div>
 		<div>
 			<a href="<?php echo esc_url( admin_url( 'admin.php?page=rhw-calculator-builder' ) ); ?>" class="button button-primary button-hero rhw-btn-accent">
@@ -25,6 +25,7 @@ $submissions_table = $wpdb->prefix . 'rhw_submissions';
 			</a>
 		</div>
 	</div>
+	<hr class="wp-header-end">
 
 	<?php if ( isset( $_GET['deleted'] ) ) : ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Form deleted successfully.', 'rhw-calculator' ); ?></p></div>

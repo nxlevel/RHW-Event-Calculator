@@ -68,8 +68,23 @@ class RHW_Submission_Handler {
 		}
 
 		// 3. Extract & Sanitize Answers
-		$raw_answers = isset( $_POST['answers'] ) ? (array) $_POST['answers'] : array();
-		$answers     = $this->sanitize_answers( $raw_answers );
+		if ( isset( $_POST['answers'] ) && is_array( $_POST['answers'] ) ) {
+			$raw_answers = (array) $_POST['answers'];
+		} else {
+			$raw_answers = array();
+			$system_keys = array( 'action', 'nonce', 'form_id', 'rhw_website_hp', 'answers_other', 'answers_files' );
+			foreach ( $_POST as $k => $v ) {
+				if ( ! in_array( $k, $system_keys, true ) && 0 !== strpos( $k, '_' ) ) {
+					$raw_answers[ $k ] = $v;
+				}
+			}
+		}
+		if ( isset( $_POST['answers'] ) && is_array( $_POST['answers'] ) ) {
+			foreach ( $_POST['answers'] as $ak => $av ) {
+				$raw_answers[ $ak ] = $av;
+			}
+		}
+		$answers = $this->sanitize_answers( $raw_answers );
 
 		// 4. Handle File Uploads (Décor design, bouquet inspiration)
 		$uploaded_files = $this->handle_file_uploads();
@@ -91,8 +106,16 @@ class RHW_Submission_Handler {
 		// 5. Server-Side Required Field Validation
 		$errors = $this->validate_required_fields( $form, $answers );
 		if ( ! empty( $errors ) ) {
+			$missing = array();
+			foreach ( $errors as $msg ) {
+				$missing[] = rtrim( $msg, '.' );
+			}
 			wp_send_json_error( array(
-				'message' => esc_html__( 'Please complete all required fields.', 'rhw-calculator' ),
+				'message' => sprintf(
+					/* translators: %s: Missing fields */
+					esc_html__( 'Please complete all required fields: %s', 'rhw-calculator' ),
+					implode( ', ', $missing )
+				),
 				'errors'  => $errors,
 			) );
 		}
@@ -104,7 +127,11 @@ class RHW_Submission_Handler {
 		$customer_res    = isset( $answers['lead_country'] ) ? sanitize_text_field( $answers['lead_country'] ) : '';
 		$raw_event_date  = isset( $answers['event_date'] ) ? sanitize_text_field( $answers['event_date'] ) : '';
 		$raw_event_time  = isset( $answers['event_time'] ) ? sanitize_text_field( $answers['event_time'] ) : '';
-		$event_date_comb = ! empty( $raw_event_time ) ? ( $raw_event_date . ' at ' . $raw_event_time ) : $raw_event_date;
+		if ( ! empty( $raw_event_time ) && false === stripos( $raw_event_date, ' at ' ) ) {
+			$event_date_comb = $raw_event_date . ' at ' . $raw_event_time;
+		} else {
+			$event_date_comb = $raw_event_date;
+		}
 		$event_type      = isset( $answers['event_type'] ) ? sanitize_text_field( $answers['event_type'] ) : '';
 		$venue_selection = isset( $answers['venue_selection'] ) ? sanitize_text_field( $answers['venue_selection'] ) : '';
 
@@ -234,11 +261,18 @@ class RHW_Submission_Handler {
 	 * Validate required fields on server.
 	 */
 	private function validate_required_fields( $form, $answers ) {
-		$errors    = array();
-		$questions = isset( $form['questions'] ) ? $form['questions'] : array();
+		$errors       = array();
+		$questions    = isset( $form['questions'] ) ? $form['questions'] : array();
+		$service_type = isset( $answers['service_type'] ) ? $answers['service_type'] : '';
+		$is_venue_only = ( 'venue_only' === $service_type || false !== stripos( (string) $service_type, 'Venue Only' ) );
 
 		foreach ( $questions as $q ) {
 			if ( empty( $q['required'] ) ) {
+				continue;
+			}
+
+			// Questions requiring full service are skipped/not required when venue-only is selected
+			if ( $is_venue_only && ! empty( $q['requires_full_service'] ) ) {
 				continue;
 			}
 
@@ -249,11 +283,17 @@ class RHW_Submission_Handler {
 			$qid = isset( $q['id'] ) ? $q['id'] : '';
 			$val = isset( $answers[ $qid ] ) ? $answers[ $qid ] : null;
 
+			// If empty, also check if answers has {$qid}_date (for datetime inputs)
+			if ( ( null === $val || '' === $val || ( is_array( $val ) && empty( $val ) ) ) && ! empty( $answers[ $qid . '_date' ] ) ) {
+				$val = $answers[ $qid . '_date' ];
+			}
+
 			if ( null === $val || '' === $val || ( is_array( $val ) && empty( $val ) ) ) {
+				$label = isset( $q['label'] ) ? $q['label'] : $qid;
 				$errors[ $qid ] = sprintf(
 					/* translators: %s: Field label */
 					esc_html__( '%s is required.', 'rhw-calculator' ),
-					isset( $q['label'] ) ? $q['label'] : $qid
+					$label
 				);
 			}
 		}

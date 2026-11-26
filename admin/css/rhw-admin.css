@@ -3,9 +3,25 @@
  */
 
 .rhw-admin-wrap {
-	max-width: 1200px;
+	max-width: 100%;
 	margin: 20px 20px 0 0;
+	box-sizing: border-box;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+
+hr.wp-header-end {
+	visibility: hidden;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	height: 0;
+	clear: both;
+}
+
+.rhw-admin-wrap .notice,
+.rhw-admin-wrap div.updated,
+.rhw-admin-wrap div.error {
+	margin: 15px 0 20px 0;
 }
 
 .rhw-header-bar {

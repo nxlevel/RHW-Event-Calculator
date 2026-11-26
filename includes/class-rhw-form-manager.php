@@ -120,7 +120,7 @@ class RHW_Form_Manager {
 				array(
 					'id'          => 'sec_event',
 					'title'       => 'Event & Venue Details',
-					'description' => 'Select your preferred date, guest count, and exquisite Rose Hall venue.',
+					'description' => 'Tell us about your upcoming event date, guest count, preferred venue, décor, etc.',
 					'icon'        => 'calendar',
 				),
 				array(
@@ -185,17 +185,9 @@ class RHW_Form_Manager {
 				array(
 					'id'         => 'event_date',
 					'section_id' => 'sec_event',
-					'label'      => 'Preferred Date of Wedding / Event',
-					'help_text'  => 'Select your preferred date. Venue rental rates depend on whether your date falls on a Weekday (Monday–Thursday) or Weekend / Holiday (Friday–Sunday).',
-					'type'       => 'date',
-					'required'   => true,
-				),
-				array(
-					'id'         => 'event_time',
-					'section_id' => 'sec_event',
-					'label'      => 'Preferred Time of Ceremony / Event',
-					'help_text'  => 'Suggested ceremony times: 3:30 PM, 4:00 PM, or 4:30 PM for sunset photos.',
-					'type'       => 'time',
+					'label'      => 'Select a Date and Time for your upcoming Wedding / Event',
+					'help_text'  => 'Select your preferred date and time. Venue rental rates depend on whether your date falls on a Weekday (Monday–Thursday) or Weekend / Holiday (Friday–Sunday). Suggested ceremony times: 3:30 PM, 4:00 PM, or 4:30 PM for sunset photos.',
+					'type'       => 'datetime',
 					'required'   => true,
 				),
 				array(

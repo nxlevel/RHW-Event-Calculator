@@ -259,10 +259,46 @@
 
 /* Date & Time Pickers with Rate Badges */
 .rhw-date-picker-wrap,
-.rhw-time-picker-wrap {
+.rhw-time-picker-wrap,
+.rhw-datetime-picker-wrap {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
+}
+
+.rhw-datetime-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+
+@media (max-width: 600px) {
+	.rhw-datetime-grid {
+		grid-template-columns: 1fr;
+		gap: 12px;
+	}
+}
+
+.rhw-datetime-col {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.rhw-input-sublabel {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--rhw-text);
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.rhw-input-sublabel .dashicons {
+	font-size: 15px;
+	width: 15px;
+	height: 15px;
+	color: var(--rhw-accent);
 }
 
 .rhw-date-rate-pill {
@@ -443,13 +479,14 @@
 }
 
 .rhw-checkbox-tile input:checked ~ .rhw-choice-indicator::after {
-	width: 5px;
+	content: '';
+	width: 8px;
 	height: 8px;
-	border: solid white;
-	border-width: 0 2px 2px 0;
-	transform: rotate(45deg);
-	border-radius: 0;
-	margin-bottom: 2px;
+	background: #ffffff;
+	border-radius: 2px;
+	border: none;
+	transform: none;
+	margin: 0;
 }
 
 .rhw-choice-tile input:checked ~ .rhw-choice-text {
@@ -627,9 +664,9 @@
 /* Sticky Live Cost Sidebar (Requirement 6) */
 .rhw-calc-sidebar {
 	position: sticky;
-	top: 24px;
+	top: var(--rhw-sticky-top, 165px); /* Accommodates 80px static menu + 69px alert banner + buffer */
 	align-self: flex-start;
-	z-index: 100;
+	z-index: 99;
 }
 
 .rhw-sticky-card {

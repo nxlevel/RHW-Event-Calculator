@@ -81,7 +81,13 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 						<div class="rhw-step-header">
 							<h3 class="rhw-step-heading"><?php echo esc_html( $sec['title'] ); ?></h3>
 							<?php if ( ! empty( $sec['description'] ) ) : ?>
-								<p class="rhw-step-subheading"><?php echo esc_html( $sec['description'] ); ?></p>
+								<?php
+								$sec_desc = $sec['description'];
+								if ( false !== stripos( $sec_desc, 'Tell us about your envisioned celebration date' ) || false !== stripos( $sec_desc, 'Select your preferred date, guest count, and exquisite Rose Hall venue' ) ) {
+									$sec_desc = __( 'Tell us about your upcoming event date, guest count, preferred venue, décor, etc.', 'rhw-calculator' );
+								}
+								?>
+								<p class="rhw-step-subheading"><?php echo esc_html( $sec_desc ); ?></p>
 							<?php endif; ?>
 						</div>
 
@@ -119,8 +125,49 @@ $radius        = ! empty( $appearance['border_radius'] ) ? $appearance['border_r
 										<div class="rhw-field-help"><?php echo esc_html( $q['help_text'] ); ?></div>
 									<?php endif; ?>
 
+									<!-- Date & Time Picker (Weekday / Weekend) all-in-one -->
+									<?php if ( 'datetime' === $q['type'] || ( 'date' === $q['type'] && ( false !== stripos( $q['label'], 'time' ) || ! empty( $q['has_time'] ) ) ) ) : ?>
+										<div class="rhw-datetime-picker-wrap" data-qid="<?php echo $qid; ?>">
+											<div class="rhw-datetime-grid">
+												<div class="rhw-datetime-col">
+													<label class="rhw-input-sublabel" for="rhw_date_<?php echo $qid; ?>">
+														<span class="dashicons dashicons-calendar-alt"></span> <?php esc_html_e( 'Date', 'rhw-calculator' ); ?>
+													</label>
+													<input type="date"
+													       name="<?php echo $qid; ?>_date"
+													       id="rhw_date_<?php echo $qid; ?>"
+													       class="rhw-text-input rhw-date-input"
+													       min="<?php echo esc_attr( date( 'Y-m-d' ) ); ?>"
+													       <?php echo $is_req ? 'required' : ''; ?>>
+												</div>
+												<div class="rhw-datetime-col">
+													<label class="rhw-input-sublabel" for="rhw_time_<?php echo $qid; ?>">
+														<span class="dashicons dashicons-clock"></span> <?php esc_html_e( 'Time', 'rhw-calculator' ); ?>
+													</label>
+													<input type="time"
+													       name="<?php echo $qid; ?>_time"
+													       id="rhw_time_<?php echo $qid; ?>"
+													       class="rhw-text-input rhw-time-input"
+													       value="16:00"
+													       <?php echo $is_req ? 'required' : ''; ?>>
+												</div>
+											</div>
+											<input type="hidden"
+											       name="<?php echo $qid; ?>"
+											       id="rhw_field_<?php echo $qid; ?>"
+											       class="rhw-datetime-combined"
+											       value="">
+											<?php if ( 'event_date' === $qid ) : ?>
+												<input type="hidden" name="event_time" class="rhw-datetime-time-mirror" value="16:00">
+											<?php endif; ?>
+											<div class="rhw-date-rate-pill" id="rhw-rate-indicator-<?php echo $qid; ?>" style="display:none;">
+												<span class="dashicons dashicons-calendar-alt"></span>
+												<span class="rhw-rate-pill-text"></span>
+											</div>
+										</div>
+
 									<!-- Date Picker with Weekday / Weekend Live Indicator -->
-									<?php if ( 'date' === $q['type'] ) : ?>
+									<?php elseif ( 'date' === $q['type'] ) : ?>
 										<div class="rhw-date-picker-wrap">
 											<input type="date"
 											       name="<?php echo $qid; ?>"

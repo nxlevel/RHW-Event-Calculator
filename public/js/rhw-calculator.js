@@ -29,16 +29,53 @@
 		const totalSteps = $panes.length;
 		let isSubmitting = false;
 
+		let interactionCounter = 0;
+		const itemOrderMap = {};
+
+		function trackInteraction(target) {
+			const $target = $(target);
+			const $qField = $target.closest('.rhw-q-field');
+			const qid = $qField.data('qid');
+			if (!qid) return;
+
+			interactionCounter++;
+			itemOrderMap[qid] = interactionCounter;
+
+			if ($target.is('input[type="radio"]') || $target.is('select')) {
+				const val = $target.val();
+				if (val) {
+					itemOrderMap[qid + '_' + val] = interactionCounter;
+				}
+			} else if ($target.is('input[type="checkbox"]')) {
+				const val = $target.val();
+				if (val) {
+					itemOrderMap[qid + '_' + val] = interactionCounter;
+				}
+			}
+		}
+
+		function updateStickyTopOffset() {
+			let topOffset = 165; // Accommodates 80px menu + 69px alert banner + buffer
+			if ($('#wpadminbar').length && $('#wpadminbar').is(':visible')) {
+				topOffset += $('#wpadminbar').outerHeight() || 32;
+			}
+			$wrapper[0].style.setProperty('--rhw-sticky-top', topOffset + 'px');
+		}
+		updateStickyTopOffset();
+		$(window).on('resize scroll', updateStickyTopOffset);
+
 		// Initial setup
 		initNumberSteppers();
 		initFileUploads();
 		initOtherTextInputs();
+		initDateTimePicker();
 		initDatePickerRates();
 		evaluateConditionalLogic();
 		runLiveCalculation();
 
 		// Event Bindings
 		$wrapper.on('change input', 'input, select, textarea', function() {
+			trackInteraction(this);
 			evaluateConditionalLogic();
 			runLiveCalculation();
 		});
@@ -88,25 +125,70 @@
 		});
 
 		/**
+		 * Date & Time Picker All-In-One Synchronization (Admin Change 5)
+		 */
+		function initDateTimePicker() {
+			$wrapper.find('.rhw-datetime-picker-wrap').each(function() {
+				const $wrap = $(this);
+				const $dateInp = $wrap.find('.rhw-date-input');
+				const $timeInp = $wrap.find('.rhw-time-input');
+				const $combined = $wrap.find('.rhw-datetime-combined');
+				const $mirror = $wrap.find('.rhw-datetime-time-mirror');
+
+				function syncDateTime() {
+					const d = $dateInp.val();
+					const t = $timeInp.val();
+					if (d && t) {
+						let formattedTime = t;
+						try {
+							const parts = t.split(':');
+							let h = parseInt(parts[0], 10);
+							const m = parts[1];
+							const ampm = h >= 12 ? 'PM' : 'AM';
+							h = h % 12 || 12;
+							formattedTime = `${h}:${m} ${ampm}`;
+						} catch(e) {}
+						$combined.val(`${d} at ${formattedTime}`);
+					} else if (d) {
+						$combined.val(d);
+					} else {
+						$combined.val('');
+					}
+					if ($mirror.length && t) {
+						$mirror.val(t);
+					}
+				}
+
+				$dateInp.on('change input', syncDateTime);
+				$timeInp.on('change input', syncDateTime);
+				syncDateTime();
+			});
+		}
+
+		/**
 		 * Date Picker Weekday / Weekend Live Detection (Requirement 1 & 2)
 		 */
 		function initDatePickerRates() {
-			const $dateInput = $wrapper.find('input[name="event_date"]');
-			if (!$dateInput.length) return;
+			$wrapper.find('.rhw-date-input').each(function() {
+				const $input = $(this);
+				const $group = $input.closest('.rhw-form-group');
+				const qid = $group.data('qid') || 'event_date';
 
-			$dateInput.on('change input', function() {
-				updateDateRateDisplay($(this).val());
-				runLiveCalculation();
+				$input.on('change input', function() {
+					updateDateRateDisplay($(this).val(), qid);
+					runLiveCalculation();
+				});
+
+				if ($input.val()) {
+					updateDateRateDisplay($input.val(), qid);
+				}
 			});
-
-			if ($dateInput.val()) {
-				updateDateRateDisplay($dateInput.val());
-			}
 		}
 
 		function isDateWeekend(dateVal) {
 			if (!dateVal) return true; // Default to weekend standard
-			const parts = dateVal.split('-');
+			const datePart = (String(dateVal).split(' ')[0] || '').split('T')[0];
+			const parts = datePart.split('-');
 			if (parts.length === 3) {
 				const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
 				const day = d.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
@@ -115,17 +197,22 @@
 			return true;
 		}
 
-		function updateDateRateDisplay(dateVal) {
-			const $pill = $wrapper.find('#rhw-rate-indicator-event_date');
+		function updateDateRateDisplay(dateVal, qid) {
+			qid = qid || 'event_date';
+			const $pill = $wrapper.find('#rhw-rate-indicator-' + qid).length
+				? $wrapper.find('#rhw-rate-indicator-' + qid)
+				: $wrapper.find('.rhw-date-rate-pill').first();
+
 			if (!dateVal) {
 				$pill.hide();
 				return;
 			}
 
 			const isWeekend = isDateWeekend(dateVal);
-			const parts = dateVal.split('-');
+			const datePart = (String(dateVal).split(' ')[0] || '').split('T')[0];
+			const parts = datePart.split('-');
 			const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-			const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+			const dayName = isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { weekday: 'long' });
 
 			$pill.removeClass('rhw-rate-pill-weekend rhw-rate-pill-weekday');
 			if (isWeekend) {
@@ -246,9 +333,9 @@
 				}
 			});
 
-			// Smooth scroll to top of wizard
+			// Smooth scroll to top of wizard (clearing 80px menu + 69px alert)
 			$('html, body').animate({
-				scrollTop: $wrapper.offset().top - 30
+				scrollTop: $wrapper.offset().top - 170
 			}, 300);
 		}
 
@@ -278,6 +365,10 @@
 					fieldVal = $group.find('input[type="checkbox"]:checked').length > 0 ? 'checked' : '';
 				} else if (q.type === 'select') {
 					fieldVal = $group.find('select').val() || '';
+				} else if (q.type === 'datetime' || (q.type === 'date' && $group.find('.rhw-datetime-picker-wrap').length)) {
+					const dVal = $group.find('.rhw-date-input').val();
+					const tVal = $group.find('.rhw-time-input').val();
+					fieldVal = (dVal && tVal) ? `${dVal} at ${tVal}` : (dVal || '');
 				} else {
 					fieldVal = $.trim($group.find('input, textarea').val());
 				}
@@ -299,16 +390,90 @@
 				}
 			});
 
-			// Jump / scroll to missed question (Requirement 5)
+			// Jump / scroll to missed question (clearing 80px menu + 69px alert)
 			if (!isValid && $firstErrorGroup) {
 				$('html, body').animate({
-					scrollTop: $firstErrorGroup.offset().top - 80
+					scrollTop: $firstErrorGroup.offset().top - 170
 				}, 350, function() {
 					$firstErrorGroup.find('input, select, textarea').first().focus();
 				});
 			}
 
 			return isValid;
+		}
+
+		/**
+		 * Validate all steps before submitting to prevent false submission alerts
+		 */
+		function validateAllSteps() {
+			let isValid = true;
+			let firstErrorGroup = null;
+			let errorStep = -1;
+
+			$wrapper.find('.rhw-form-group').removeClass('has-error');
+			$wrapper.find('.rhw-error-message').hide();
+
+			const answers = collectAnswers();
+			const serviceType = answers.service_type || '';
+			const isVenueOnly = (serviceType === 'venue_only');
+
+			$panes.each(function(stepIdx) {
+				const $pane = $(this);
+				$pane.find('.rhw-form-group').each(function() {
+					const $group = $(this);
+					if ($group.hasClass('rhw-hidden')) return;
+
+					const qid = $group.data('qid');
+					const q = questions.find(item => item.id === qid);
+					if (!q || !q.required) return;
+					if (isVenueOnly && q.requires_full_service) return;
+
+					let fieldVal = '';
+					if (q.type === 'radio') {
+						fieldVal = $group.find('input[type="radio"]:checked').val() || '';
+					} else if (q.type === 'checkboxes' || q.type === 'checkbox') {
+						fieldVal = $group.find('input[type="checkbox"]:checked').length > 0 ? 'checked' : '';
+					} else if (q.type === 'select') {
+						fieldVal = $group.find('select').val() || '';
+					} else if (q.type === 'datetime' || (q.type === 'date' && $group.find('.rhw-datetime-picker-wrap').length)) {
+						const dVal = $group.find('.rhw-date-input').val();
+						const tVal = $group.find('.rhw-time-input').val();
+						fieldVal = (dVal && tVal) ? `${dVal} at ${tVal}` : (dVal || '');
+					} else {
+						fieldVal = $.trim($group.find('input, textarea').val());
+					}
+
+					if (!fieldVal) {
+						isValid = false;
+						$group.addClass('has-error');
+						$group.find('.rhw-error-message').text(q.label + ' is required.').fadeIn(200);
+						if (!firstErrorGroup) {
+							firstErrorGroup = $group;
+							errorStep = stepIdx;
+						}
+					} else if (q.type === 'email' && !isValidEmail(fieldVal)) {
+						isValid = false;
+						$group.addClass('has-error');
+						$group.find('.rhw-error-message').text('Please enter a valid email address.').fadeIn(200);
+						if (!firstErrorGroup) {
+							firstErrorGroup = $group;
+							errorStep = stepIdx;
+						}
+					}
+				});
+			});
+
+			if (!isValid && firstErrorGroup && errorStep !== -1) {
+				goToStep(errorStep);
+				$('html, body').animate({
+					scrollTop: firstErrorGroup.offset().top - 170
+				}, 350, function() {
+					firstErrorGroup.find('input, select, textarea').first().focus();
+				});
+				return false;
+			}
+
+			return true;
 		}
 
 		function isValidEmail(email) {
@@ -418,12 +583,19 @@
 				}
 			});
 
-			$wrapper.find('input[type="number"], input[type="date"], input[type="time"]').each(function() {
+			$wrapper.find('input[type="number"], input[type="date"], input[type="time"], .rhw-datetime-combined').each(function() {
 				const name = $(this).attr('name');
-				if (name && !answers[name]) {
-					answers[name] = $(this).val();
+				const val = $(this).val();
+				if (name && val !== '' && val !== undefined) {
+					answers[name] = val;
 				}
 			});
+
+			// If event_date has a datetime-combined field, make sure answers.event_date is set
+			const $eventDateCombined = $wrapper.find('.rhw-datetime-picker-wrap[data-qid="event_date"] .rhw-datetime-combined');
+			if ($eventDateCombined.length && $eventDateCombined.val()) {
+				answers.event_date = $eventDateCombined.val();
+			}
 
 			return answers;
 		}
@@ -492,6 +664,7 @@
 						const cost = num * q.unit_price;
 						lineItems.push({
 							key: q.id,
+							order: itemOrderMap[q.id] || 0,
 							title: q.label,
 							category: q.category || 'General',
 							quantity: num,
@@ -511,6 +684,13 @@
 				applyStandardProposalRentals(answers, guestCount, lineItems, subtotal);
 				subtotal = lineItems.reduce((acc, curr) => acc + curr.amount, 0);
 			}
+
+			// Sort line items descending by selection order so newly answered questions appear at the top (Frontend Change 2)
+			lineItems.sort((a, b) => {
+				const orderA = a.order || 0;
+				const orderB = b.order || 0;
+				return orderB - orderA;
+			});
 
 			// 3. Taxes & Service Charges
 			const taxRate = parseFloat(pricingSettings.tax_rate) || 15.0;
@@ -599,8 +779,12 @@
 					total = amount;
 			}
 
+			const optKey = question.id + '_' + (opt.value || opt.label);
+			const order = itemOrderMap[optKey] || itemOrderMap[question.id] || 0;
+
 			return {
-				key: opt.value || opt.label,
+				key: optKey,
+				order: order,
 				title: opt.label || question.label,
 				category: p.category || question.category || 'General',
 				quantity: qty,
@@ -781,6 +965,13 @@
 		 * Submit quote request and lead details via AJAX with FormData support
 		 */
 		function handleFormSubmit() {
+			if (isSubmitting) return;
+
+			// Validate ALL wizard steps before submitting (Requirement 5)
+			if (!validateAllSteps()) {
+				return;
+			}
+
 			isSubmitting = true;
 			const $submitBtn = $wrapper.find('.rhw-btn-submit');
 			$submitBtn.addClass('loading').prop('disabled', true);
@@ -791,6 +982,16 @@
 			formData.append('action', 'rhw_submit_quote');
 			formData.append('nonce', config.nonce);
 			formData.append('form_id', formId);
+
+			// Explicitly append structured answers dictionary
+			const answers = collectAnswers();
+			for (const [k, v] of Object.entries(answers)) {
+				if (Array.isArray(v)) {
+					v.forEach(val => formData.append(`answers[${k}][]`, val));
+				} else {
+					formData.append(`answers[${k}]`, v);
+				}
+			}
 
 			$.ajax({
 				url: config.ajax_url,
@@ -803,6 +1004,23 @@
 					if (response.success) {
 						showSuccessState(response.data);
 					} else {
+						if (response.data && response.data.errors) {
+							const firstErrQid = Object.keys(response.data.errors)[0];
+							const $errField = $wrapper.find(`.rhw-form-group[data-qid="${firstErrQid}"]`);
+							if ($errField.length) {
+								const stepIdx = $errField.closest('.rhw-step-pane').data('step-index');
+								if (stepIdx !== undefined) {
+									goToStep(parseInt(stepIdx, 10));
+								}
+								$errField.addClass('has-error');
+								$errField.find('.rhw-error-message').text(response.data.errors[firstErrQid]).fadeIn(200);
+								$('html, body').animate({
+									scrollTop: $errField.offset().top - 170
+								}, 350, function() {
+									$errField.find('input, select, textarea').first().focus();
+								});
+							}
+						}
 						alert(response.data && response.data.message ? response.data.message : (i18n.network_error || 'An error occurred.'));
 						$submitBtn.removeClass('loading').prop('disabled', false);
 						isSubmitting = false;
@@ -834,7 +1052,7 @@
 			$successView.fadeIn(300);
 
 			$('html, body').animate({
-				scrollTop: $wrapper.offset().top - 30
+				scrollTop: $wrapper.offset().top - 170
 			}, 300);
 		}
 

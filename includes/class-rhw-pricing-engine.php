@@ -52,8 +52,10 @@ class RHW_Pricing_Engine {
 		// 2. Determine Day Type (Weekday vs Weekend / Holiday) from event_date
 		$is_weekend = false;
 		if ( ! empty( $answers['event_date'] ) ) {
-			$date_str = sanitize_text_field( $answers['event_date'] );
-			$timestamp = strtotime( $date_str );
+			$date_str   = sanitize_text_field( $answers['event_date'] );
+			$date_clean = trim( explode( ' at ', $date_str )[0] );
+			$date_clean = trim( explode( 'T', $date_clean )[0] );
+			$timestamp  = strtotime( $date_clean );
 			if ( $timestamp ) {
 				$day_of_week = (int) date( 'N', $timestamp ); // 1 (Mon) to 7 (Sun)
 				// Friday (5), Saturday (6), Sunday (7) are weekend rates in luxury venue hospitality

@@ -24,6 +24,7 @@ $delete_on_uninstall    = get_option( 'rhw_delete_data_on_uninstall', '0' );
 			<p class="rhw-header-subtitle"><?php esc_html_e( 'Configure system-wide defaults, taxes, and data safety preferences.', 'rhw-calculator' ); ?></p>
 		</div>
 	</div>
+	<hr class="wp-header-end">
 
 	<?php if ( isset( $_GET['updated'] ) ) : ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Global settings saved.', 'rhw-calculator' ); ?></p></div>

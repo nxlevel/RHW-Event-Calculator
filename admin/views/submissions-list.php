@@ -42,6 +42,7 @@ $export_url = wp_nonce_url( admin_url( 'admin.php?rhw_action=export_csv' ), 'rhw
 			</a>
 		</div>
 	</div>
+	<hr class="wp-header-end">
 
 	<!-- Filter Bar -->
 	<div class="rhw-filter-bar">

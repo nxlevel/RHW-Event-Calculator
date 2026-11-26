@@ -61,6 +61,7 @@ $shortcode = $form_id > 0 ? '[event_cost_calculator id="' . esc_attr( $form_id )
 			</button>
 		</div>
 	</div>
+	<hr class="wp-header-end">
 
 	<?php if ( isset( $_GET['updated'] ) ) : ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Calculator configuration saved successfully.', 'rhw-calculator' ); ?></p></div>
