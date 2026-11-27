@@ -22,6 +22,10 @@ $default_service_charge = get_option( 'rhw_default_service_charge', 20.0 );
 $default_notif_emails   = get_option( 'rhw_default_notification_emails', get_option( 'admin_email' ) . ', weddings@rosehall.com' );
 $header_image_url       = get_option( 'rhw_header_image_url', '' );
 $delete_on_uninstall    = get_option( 'rhw_delete_data_on_uninstall', '0' );
+$recaptcha_enabled      = get_option( 'rhw_recaptcha_enabled', '0' );
+$recaptcha_type         = get_option( 'rhw_recaptcha_type', 'v2_checkbox' );
+$recaptcha_site_key     = get_option( 'rhw_recaptcha_site_key', '' );
+$recaptcha_secret_key   = get_option( 'rhw_recaptcha_secret_key', '' );
 
 $schedule_settings = RHW_Calendar_Manager::get_settings();
 $gcal_settings     = RHW_Google_Calendar::get_settings();
@@ -136,6 +140,36 @@ $redirect_uri      = RHW_Google_Calendar::get_redirect_uri();
 						<td>
 							<input type="text" name="rhw_default_notification_emails" id="rhw_default_notification_emails" value="<?php echo esc_attr( $default_notif_emails ); ?>" class="large-text">
 							<p class="description"><?php esc_html_e( 'Comma-separated email addresses for venue sales & coordination team.', 'rhw-calculator' ); ?></p>
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Bot & Spam Protection (Google reCAPTCHA)', 'rhw-calculator' ); ?></th>
+						<td>
+							<label style="display: block; margin-bottom: 10px;">
+								<input type="checkbox" name="rhw_recaptcha_enabled" value="1" <?php checked( '1' === (string) $recaptcha_enabled ); ?>>
+								<strong><?php esc_html_e( 'Enable Google reCAPTCHA verification on the final calculator page', 'rhw-calculator' ); ?></strong>
+							</label>
+							<p style="margin: 0 0 8px;">
+								<label for="rhw_recaptcha_type" style="display: inline-block; min-width: 140px;"><strong><?php esc_html_e( 'reCAPTCHA Type:', 'rhw-calculator' ); ?></strong></label>
+								<select name="rhw_recaptcha_type" id="rhw_recaptcha_type">
+									<option value="v2_checkbox" <?php selected( $recaptcha_type, 'v2_checkbox' ); ?>><?php esc_html_e( 'reCAPTCHA v2 ("I\'m not a robot" Checkbox)', 'rhw-calculator' ); ?></option>
+									<option value="v3_invisible" <?php selected( $recaptcha_type, 'v3_invisible' ); ?>><?php esc_html_e( 'reCAPTCHA v3 (Invisible Score Check)', 'rhw-calculator' ); ?></option>
+								</select>
+							</p>
+							<p style="margin: 0 0 8px;">
+								<label for="rhw_recaptcha_site_key" style="display: inline-block; min-width: 140px;"><strong><?php esc_html_e( 'Site Key:', 'rhw-calculator' ); ?></strong></label>
+								<input type="text" name="rhw_recaptcha_site_key" id="rhw_recaptcha_site_key" value="<?php echo esc_attr( $recaptcha_site_key ); ?>" class="regular-text" placeholder="6Lc...">
+							</p>
+							<p style="margin: 0 0 8px;">
+								<label for="rhw_recaptcha_secret_key" style="display: inline-block; min-width: 140px;"><strong><?php esc_html_e( 'Secret Key:', 'rhw-calculator' ); ?></strong></label>
+								<input type="password" name="rhw_recaptcha_secret_key" id="rhw_recaptcha_secret_key" value="<?php echo esc_attr( $recaptcha_secret_key ); ?>" class="regular-text" placeholder="6Lc..." autocomplete="new-password">
+							</p>
+							<p class="description">
+								<?php esc_html_e( 'Create free API keys (select reCAPTCHA v2 Checkbox) in the', 'rhw-calculator' ); ?>
+								<a href="https://www.google.com/recaptcha/admin/create" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Google reCAPTCHA Admin Console', 'rhw-calculator' ); ?></a>.
+								<?php esc_html_e( 'Protection activates once both Site Key and Secret Key are saved.', 'rhw-calculator' ); ?>
+							</p>
 						</td>
 					</tr>
 

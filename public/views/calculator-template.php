@@ -383,15 +383,21 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 
 									<!-- Number Stepper -->
 									<?php elseif ( 'number' === $q['type'] ) : ?>
+										<?php
+										$is_gc_num   = ! empty( $q['is_guest_count'] ) || 'guest_count' === $qid;
+										$num_default = isset( $q['default_value'] ) ? intval( $q['default_value'] ) : ( $is_gc_num ? 0 : 1 );
+										$num_min     = isset( $q['min'] ) ? intval( $q['min'] ) : ( $is_gc_num ? 0 : 1 );
+										$num_max     = isset( $q['max'] ) ? intval( $q['max'] ) : 1000;
+										?>
 										<div class="rhw-number-input-wrap">
 											<button type="button" class="rhw-num-btn rhw-num-minus" aria-label="Decrease">&minus;</button>
 											<input type="number"
 											       name="<?php echo $qid; ?>"
 											       id="rhw_field_<?php echo $qid; ?>"
 											       class="rhw-number-input"
-											       value="<?php echo esc_attr( isset( $q['default_value'] ) ? $q['default_value'] : 1 ); ?>"
-											       min="<?php echo esc_attr( isset( $q['min'] ) ? $q['min'] : 1 ); ?>"
-											       max="<?php echo esc_attr( isset( $q['max'] ) ? $q['max'] : 1000 ); ?>"
+											       value="<?php echo esc_attr( $num_default ); ?>"
+											       min="<?php echo esc_attr( $num_min ); ?>"
+											       max="<?php echo esc_attr( $num_max ); ?>"
 											       <?php echo $is_req ? 'required' : ''; ?>>
 											<button type="button" class="rhw-num-btn rhw-num-plus" aria-label="Increase">&plus;</button>
 										</div>
@@ -501,6 +507,21 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 							</div>
 						<?php endif; ?>
 
+						<?php if ( $s_idx === count( $sections ) - 1 ) : ?>
+							<?php
+							$rc_enabled    = get_option( 'rhw_recaptcha_enabled', '0' );
+							$rc_type       = get_option( 'rhw_recaptcha_type', 'v2_checkbox' );
+							$rc_site_key   = trim( (string) get_option( 'rhw_recaptcha_site_key', '' ) );
+							$rc_secret_key = trim( (string) get_option( 'rhw_recaptcha_secret_key', '' ) );
+							if ( '1' === (string) $rc_enabled && '' !== $rc_site_key && '' !== $rc_secret_key && 'v2_checkbox' === $rc_type ) :
+							?>
+								<div class="rhw-recaptcha-section" id="rhw-recaptcha-section-<?php echo esc_attr( $form_id ); ?>">
+									<div class="rhw-recaptcha-box" data-sitekey="<?php echo esc_attr( $rc_site_key ); ?>"></div>
+									<div class="rhw-error-message rhw-recaptcha-error" role="alert"></div>
+								</div>
+							<?php endif; ?>
+						<?php endif; ?>
+
 						<!-- Wizard Navigation Buttons -->
 						<div class="rhw-wizard-buttons">
 							<?php if ( $s_idx > 0 ) : ?>
@@ -563,10 +584,30 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 						</div>
 					</div>
 
-					<div class="rhw-gcal-sync-wrap" style="display:none; margin: 18px 0; text-align: center;">
-						<a href="#" target="_blank" rel="noopener noreferrer" class="button button-primary rhw-btn-gcal" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 12px 22px; font-weight: 700; font-size: 14px; border-radius: 6px; background: #4285F4; color: #ffffff; border: none; box-shadow: 0 2px 6px rgba(66, 133, 244, 0.3);">
-							<span class="dashicons dashicons-calendar-alt"></span> <?php esc_html_e( 'Add Appointment to Google Calendar', 'rhw-calculator' ); ?>
-						</a>
+					<div class="rhw-gcal-sync-wrap rhw-cal-dropdown-wrap" style="display:none;">
+						<button type="button" class="rhw-btn-gcal rhw-cal-toggle-btn" aria-expanded="false" aria-haspopup="true">
+							<span class="dashicons dashicons-calendar-alt"></span>
+							<span><?php esc_html_e( 'Add Appointment To Calendar', 'rhw-calculator' ); ?></span>
+							<span class="dashicons dashicons-arrow-down-alt2 rhw-cal-caret"></span>
+						</button>
+						<div class="rhw-cal-menu" role="menu" style="display:none;">
+							<a href="#" class="rhw-cal-opt" data-cal="ics" download="rose-hall-consultation.ics" role="menuitem">
+								<strong><?php esc_html_e( 'Apple Calendar / Outlook App (.ics)', 'rhw-calculator' ); ?></strong>
+								<small><?php esc_html_e( 'iPhone, Mac, Outlook Desktop & Android', 'rhw-calculator' ); ?></small>
+							</a>
+							<a href="#" target="_blank" rel="noopener noreferrer" class="rhw-cal-opt" data-cal="google" role="menuitem">
+								<strong><?php esc_html_e( 'Google Calendar', 'rhw-calculator' ); ?></strong>
+							</a>
+							<a href="#" target="_blank" rel="noopener noreferrer" class="rhw-cal-opt" data-cal="outlook" role="menuitem">
+								<strong><?php esc_html_e( 'Outlook.com (Web)', 'rhw-calculator' ); ?></strong>
+							</a>
+							<a href="#" target="_blank" rel="noopener noreferrer" class="rhw-cal-opt" data-cal="office365" role="menuitem">
+								<strong><?php esc_html_e( 'Office 365 Calendar', 'rhw-calculator' ); ?></strong>
+							</a>
+							<a href="#" target="_blank" rel="noopener noreferrer" class="rhw-cal-opt" data-cal="yahoo" role="menuitem">
+								<strong><?php esc_html_e( 'Yahoo Calendar', 'rhw-calculator' ); ?></strong>
+							</a>
+						</div>
 					</div>
 
 					<div class="rhw-next-steps-box">
@@ -588,7 +629,7 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 					</div>
 					<div class="rhw-guest-count-pill">
 						<span class="dashicons dashicons-groups"></span>
-						<span id="rhw-live-guest-display">75</span> <?php esc_html_e( 'Guests', 'rhw-calculator' ); ?>
+						<span id="rhw-live-guest-display">0</span> <?php esc_html_e( 'Guests', 'rhw-calculator' ); ?>
 					</div>
 				</div>
 

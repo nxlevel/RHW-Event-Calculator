@@ -198,8 +198,8 @@ class RHW_Form_Manager {
 					'type'           => 'number',
 					'required'       => true,
 					'is_guest_count' => true,
-					'default_value'  => 75,
-					'min'            => 1,
+					'default_value'  => 0,
+					'min'            => 0,
 					'max'            => 1000,
 				),
 				array(
@@ -503,17 +503,17 @@ class RHW_Form_Manager {
 					'label'      => 'Personal Flowers',
 					'type'       => 'checkboxes',
 					'required'   => false,
-					'category'   => 'Personal Flowers',
+					'category'   => 'Flowers',
 					'options'    => array(
 						array(
 							'label'   => 'Bridal Bouquet with Matching Boutonniere ($225.00)',
 							'value'   => 'bridal_bouquet',
-							'pricing' => array( 'type' => 'fixed', 'amount' => 225.00, 'category' => 'Personal Flowers' ),
+							'pricing' => array( 'type' => 'fixed', 'amount' => 225.00, 'category' => 'Flowers' ),
 						),
 						array(
 							'label'   => 'Bridesmaid Bouquet with Matching Boutonniere ($125.00)',
 							'value'   => 'bridesmaid_bouquet',
-							'pricing' => array( 'type' => 'fixed', 'amount' => 125.00, 'category' => 'Personal Flowers' ),
+							'pricing' => array( 'type' => 'fixed', 'amount' => 125.00, 'category' => 'Flowers' ),
 						),
 					),
 				),
@@ -533,12 +533,12 @@ class RHW_Form_Manager {
 					'help_text'   => 'Our venues are historic and outdoor. A heavy-duty generator ensures seamless sound, lighting, and kitchen power.',
 					'type'        => 'radio',
 					'required'    => false,
-					'category'    => 'Equipment & Rentals',
+					'category'    => 'Equipment Rentals',
 					'options'     => array(
 						array(
 							'label'   => 'Include Heavy Duty Event Generator ($885.00)',
 							'value'   => 'yes',
-							'pricing' => array( 'type' => 'fixed', 'amount' => 885.00, 'category' => 'Equipment & Rentals' ),
+							'pricing' => array( 'type' => 'fixed', 'amount' => 885.00, 'category' => 'Equipment Rentals' ),
 						),
 						array(
 							'label'   => 'Not required / Client will provide own certified power source',
@@ -763,8 +763,8 @@ class RHW_Form_Manager {
 					'type'                 => 'number',
 					'is_participant_count' => true,
 					'required'             => false,
-					'default_value'        => 75,
-					'min'                  => 1,
+					'default_value'        => 0,
+					'min'                  => 0,
 					'max'                  => 1000,
 					'conditional'          => array(
 						'enabled'  => true,

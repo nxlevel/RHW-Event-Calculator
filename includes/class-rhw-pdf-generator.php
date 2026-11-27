@@ -1159,8 +1159,11 @@ class RHW_PDF_Generator {
 			if ( ! empty( $submission['google_meet_link'] ) ) {
 				$c_lines[] = array( 'label' => 'Google Meet Link: ', 'value' => $submission['google_meet_link'], 'url' => $submission['google_meet_link'] );
 			}
-			if ( ! empty( $submission['gcal_link'] ) ) {
-				$c_lines[] = array( 'label' => 'Google Calendar Event: ', 'value' => $submission['gcal_link'], 'url' => $submission['gcal_link'] );
+			$cal_url = ! empty( $submission['calendar_links']['ics'] )
+				? $submission['calendar_links']['ics']
+				: ( ! empty( $submission['gcal_link'] ) ? $submission['gcal_link'] : '' );
+			if ( ! empty( $cal_url ) ) {
+				$c_lines[] = array( 'label' => 'Add Appointment To Calendar: ', 'value' => $cal_url, 'url' => $cal_url );
 			}
 
 			$c_box_h = 16.0;

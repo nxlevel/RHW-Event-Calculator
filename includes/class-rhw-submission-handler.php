@@ -32,6 +32,77 @@ class RHW_Submission_Handler {
 
 		add_action( 'wp_ajax_rhw_get_month_availability', array( $this, 'handle_get_month_availability' ) );
 		add_action( 'wp_ajax_nopriv_rhw_get_month_availability', array( $this, 'handle_get_month_availability' ) );
+
+		add_action( 'wp_ajax_rhw_download_ics', array( $this, 'handle_download_ics' ) );
+		add_action( 'wp_ajax_nopriv_rhw_download_ics', array( $this, 'handle_download_ics' ) );
+	}
+
+	/**
+	 * Stream a signed .ics calendar file for Apple Calendar, Outlook, Yahoo, or any calendar app.
+	 */
+	public function handle_download_ics() {
+		$sid = isset( $_GET['sid'] ) ? intval( $_GET['sid'] ) : 0;
+		$sig = isset( $_GET['sig'] ) ? sanitize_text_field( wp_unslash( $_GET['sig'] ) ) : '';
+
+		if ( ! $sid || ! $sig ) {
+			wp_die( esc_html__( 'Invalid calendar invite link.', 'rhw-calculator' ), '', array( 'response' => 403 ) );
+		}
+
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$submission = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}rhw_submissions WHERE id = %d LIMIT 1", $sid ), ARRAY_A );
+		if ( ! $submission || ! RHW_Calendar_Manager::verify_ics_token( $sid, $submission['customer_email'], $sig ) ) {
+			wp_die( esc_html__( 'Unauthorized or expired calendar invite link.', 'rhw-calculator' ), '', array( 'response' => 403 ) );
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$booking = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}rhw_bookings WHERE submission_id = %d LIMIT 1", $sid ), ARRAY_A );
+		if ( ! $booking || empty( $booking['booking_date'] ) || empty( $booking['booking_time'] ) ) {
+			wp_die( esc_html__( 'Consultation booking details were not found.', 'rhw-calculator' ), '', array( 'response' => 404 ) );
+		}
+
+		$cal_settings  = RHW_Calendar_Manager::get_settings();
+		$tz            = RHW_Calendar_Manager::get_timezone( $cal_settings );
+		$duration_mins = max( 15, intval( $cal_settings['interval_minutes'] ) );
+
+		try {
+			$start_dt = new DateTimeImmutable( $booking['booking_date'] . ' ' . $booking['booking_time'], $tz );
+			$end_dt   = $start_dt->modify( '+' . $duration_mins . ' minutes' );
+		} catch ( Exception $e ) {
+			wp_die( esc_html__( 'Could not parse consultation date/time.', 'rhw-calculator' ), '', array( 'response' => 500 ) );
+		}
+
+		$details = sprintf(
+			"Wedding & Event Consultation with Rose Hall specialist.\nQuote ID: #%d\nPreferred Event Date: %s\nGuest Count: %d\nCustomer: %s (%s, %s)",
+			$sid,
+			$submission['event_date'],
+			intval( $submission['guest_count'] ),
+			$submission['customer_name'],
+			$submission['customer_email'],
+			$submission['customer_phone']
+		);
+		$location = 'Rose Hall Weddings & Events (Phone / Video Consultation), Montego Bay, Jamaica';
+		if ( ! empty( $booking['google_meet_link'] ) ) {
+			$details .= "\nGoogle Meet Video Link: " . $booking['google_meet_link'];
+			$location = $booking['google_meet_link'];
+		}
+
+		$host = wp_parse_url( home_url(), PHP_URL_HOST );
+		$uid  = 'rhw-consultation-' . $sid . '@' . ( $host ? $host : 'rosehall.com' );
+		$ics  = RHW_Calendar_Manager::build_ics_content(
+			'Rose Hall Wedding Consultation: ' . $submission['customer_name'],
+			$start_dt->getTimestamp(),
+			$end_dt->getTimestamp(),
+			$details,
+			$location,
+			$uid
+		);
+
+		nocache_headers();
+		header( 'Content-Type: text/calendar; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="rose-hall-consultation-' . $sid . '.ics"' );
+		echo $ics; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		exit;
 	}
 
 	/**
@@ -106,12 +177,24 @@ class RHW_Submission_Handler {
 			wp_send_json_error( array( 'message' => esc_html__( 'Form configuration could not be loaded.', 'rhw-calculator' ) ) );
 		}
 
+		// 2b. Google reCAPTCHA Verification (when enabled & configured in Settings)
+		$ip_address      = sanitize_text_field( wp_unslash( isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : '' ) );
+		$recaptcha_check = $this->verify_recaptcha( $ip_address );
+		if ( is_wp_error( $recaptcha_check ) ) {
+			wp_send_json_error(
+				array(
+					'message'         => $recaptcha_check->get_error_message(),
+					'recaptcha_error' => true,
+				)
+			);
+		}
+
 		// 3. Extract & Sanitize Answers
 		if ( isset( $_POST['answers'] ) && is_array( $_POST['answers'] ) ) {
 			$raw_answers = (array) $_POST['answers'];
 		} else {
 			$raw_answers = array();
-			$system_keys = array( 'action', 'nonce', 'form_id', 'rhw_website_hp', 'answers_other', 'answers_files' );
+			$system_keys = array( 'action', 'nonce', 'form_id', 'rhw_website_hp', 'answers_other', 'answers_files', 'g-recaptcha-response' );
 			foreach ( $_POST as $k => $v ) {
 				if ( ! in_array( $k, $system_keys, true ) && 0 !== strpos( $k, '_' ) ) {
 					$raw_answers[ $k ] = $v;
@@ -249,10 +332,12 @@ class RHW_Submission_Handler {
 
 		$submission_id = $wpdb->insert_id;
 
-		// Consultation Slot Booking & 2-Way Google Calendar Sync
+		// Consultation Slot Booking & Universal Calendar Links + 2-Way Google Calendar Sync
 		$gcal_link        = '';
 		$google_meet_link = '';
 		$google_event_id  = '';
+		$calendar_links   = array();
+		$ics_path         = '';
 
 		if ( ! empty( $consultation_date ) && ! empty( $consultation_time ) ) {
 			RHW_Activator::ensure_bookings_table_exists();
@@ -277,18 +362,21 @@ class RHW_Submission_Handler {
 					$customer_email,
 					$customer_phone
 				);
-				$gcal_link = RHW_Google_Calendar::build_manual_gcal_url(
-					'Rose Hall Wedding Consultation: ' . $customer_name,
+				$cal_title    = 'Rose Hall Wedding Consultation: ' . $customer_name;
+				$cal_location = 'Rose Hall Weddings & Events (Phone / Video Consultation), Montego Bay, Jamaica';
+				$gcal_link    = RHW_Google_Calendar::build_manual_gcal_url(
+					$cal_title,
 					$start_ts,
 					$end_ts,
-					$gcal_details
+					$gcal_details,
+					$cal_location
 				);
 
 				// Automatically create event in connected team Google Calendar if enabled
 				if ( RHW_Google_Calendar::is_connected() ) {
 					$gcal_result = RHW_Google_Calendar::create_event(
 						array(
-							'summary'        => 'Rose Hall Wedding Consultation: ' . $customer_name,
+							'summary'        => $cal_title,
 							'description'    => $gcal_details . "\nView in WP Admin: " . admin_url( 'admin.php?page=rhw-calculator-submissions&action=view&id=' . $submission_id ),
 							'start_iso'      => $start_dt->format( DATE_RFC3339 ),
 							'end_iso'        => $end_dt->format( DATE_RFC3339 ),
@@ -305,6 +393,33 @@ class RHW_Submission_Handler {
 							$gcal_link = $gcal_result['html_link'];
 						}
 					}
+				}
+
+				$invite_details = $gcal_details;
+				$invite_loc     = $cal_location;
+				if ( ! empty( $google_meet_link ) ) {
+					$invite_details .= "\nGoogle Meet Video Link: " . $google_meet_link;
+					$invite_loc      = $google_meet_link;
+				}
+
+				$manual_gcal_url = RHW_Google_Calendar::build_manual_gcal_url( $cal_title, $start_ts, $end_ts, $invite_details, $invite_loc );
+				$calendar_links  = RHW_Calendar_Manager::build_calendar_links(
+					$submission_id,
+					$customer_email,
+					$cal_title,
+					$start_ts,
+					$end_ts,
+					$invite_details,
+					$invite_loc,
+					$manual_gcal_url
+				);
+
+				$host        = wp_parse_url( home_url(), PHP_URL_HOST );
+				$ics_uid     = 'rhw-consultation-' . $submission_id . '@' . ( $host ? $host : 'rosehall.com' );
+				$ics_content = RHW_Calendar_Manager::build_ics_content( $cal_title, $start_ts, $end_ts, $invite_details, $invite_loc, $ics_uid );
+				$saved_ics   = RHW_Calendar_Manager::save_temp_ics_file( $submission_id, $ics_content );
+				if ( $saved_ics ) {
+					$ics_path = $saved_ics;
 				}
 			} catch ( Exception $e ) {
 				// Non-fatal fallback
@@ -335,6 +450,8 @@ class RHW_Submission_Handler {
 			$submission_data['consultation_date'] = $consultation_date;
 			$submission_data['consultation_time'] = $consultation_time;
 			$submission_data['gcal_link']         = $gcal_link;
+			$submission_data['calendar_links']    = $calendar_links;
+			$submission_data['ics_path']          = $ics_path;
 			$submission_data['google_meet_link']  = $google_meet_link;
 		}
 
@@ -353,11 +470,58 @@ class RHW_Submission_Handler {
 			'consultation_date' => $consultation_date,
 			'consultation_time' => $consultation_time,
 			'gcal_link'         => $gcal_link,
+			'calendar_links'    => $calendar_links,
 			'google_meet_link'  => $google_meet_link,
 			'guest_count'       => $calc['guest_count'],
 			'grand_total'       => $calc['formatted']['grand_total'],
 			'message'           => esc_html__( 'Thank you! Your consultation request was sent! Our Destination Relationship Specialists will connect with you at your chosen appointment time.', 'rhw-calculator' ),
 		) );
+	}
+
+	/**
+	 * Verify Google reCAPTCHA token against Google siteverify API when configured.
+	 */
+	private function verify_recaptcha( $ip_address = '' ) {
+		$enabled    = get_option( 'rhw_recaptcha_enabled', '0' );
+		$type       = get_option( 'rhw_recaptcha_type', 'v2_checkbox' );
+		$site_key   = trim( (string) get_option( 'rhw_recaptcha_site_key', '' ) );
+		$secret_key = trim( (string) get_option( 'rhw_recaptcha_secret_key', '' ) );
+
+		if ( '1' !== (string) $enabled || '' === $site_key || '' === $secret_key ) {
+			return true;
+		}
+
+		$token = isset( $_POST['g-recaptcha-response'] ) ? sanitize_text_field( wp_unslash( $_POST['g-recaptcha-response'] ) ) : '';
+		if ( '' === $token ) {
+			return new WP_Error( 'recaptcha_missing', esc_html__( 'Please complete the reCAPTCHA verification before submitting.', 'rhw-calculator' ) );
+		}
+
+		$response = wp_remote_post(
+			'https://www.google.com/recaptcha/api/siteverify',
+			array(
+				'timeout' => 10,
+				'body'    => array(
+					'secret'   => $secret_key,
+					'response' => $token,
+					'remoteip' => $ip_address,
+				),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error( 'recaptcha_network', esc_html__( 'Unable to verify reCAPTCHA right now. Please try again.', 'rhw-calculator' ) );
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( empty( $body['success'] ) ) {
+			return new WP_Error( 'recaptcha_invalid', esc_html__( 'reCAPTCHA verification failed. Please complete the challenge again.', 'rhw-calculator' ) );
+		}
+
+		if ( 'v3_invisible' === $type && isset( $body['score'] ) && floatval( $body['score'] ) < 0.3 ) {
+			return new WP_Error( 'recaptcha_score', esc_html__( 'Automated spam protection check failed. Please try again.', 'rhw-calculator' ) );
+		}
+
+		return true;
 	}
 
 	/**
@@ -458,6 +622,13 @@ class RHW_Submission_Handler {
 				$errors[ $qid ] = sprintf(
 					/* translators: %s: Field label */
 					esc_html__( '%s is required.', 'rhw-calculator' ),
+					$label
+				);
+			} elseif ( isset( $q['type'] ) && 'number' === $q['type'] && ( ! is_numeric( $val ) || floatval( $val ) <= 0 ) ) {
+				$label = isset( $q['label'] ) ? $q['label'] : $qid;
+				$errors[ $qid ] = sprintf(
+					/* translators: %s: Field label */
+					esc_html__( '%s must be greater than 0.', 'rhw-calculator' ),
 					$label
 				);
 			}

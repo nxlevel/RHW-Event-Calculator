@@ -3,7 +3,7 @@
  * Plugin Name:       Rose Hall Weddings - Event Cost Calculator & Lead Capture
  * Plugin URI:        https://rosehall.com/weddings
  * Description:       Interactive real-time event cost calculator and lead capture system for Rose Hall Weddings & Events.
- * Version:           2.5.1
+ * Version:           2.6.0
  * Author:            Rose Hall Developments Ltd.
  * Author URI:        https://rosehall.com
  * Text Domain:       rhw-calculator
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants.
-define( 'RHW_CALCULATOR_VERSION', '2.5.1' );
+define( 'RHW_CALCULATOR_VERSION', '2.6.0' );
 define( 'RHW_CALCULATOR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'RHW_CALCULATOR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'RHW_CALCULATOR_BASENAME', plugin_basename( __FILE__ ) );

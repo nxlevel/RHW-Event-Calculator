@@ -296,6 +296,17 @@ class RHW_Admin {
 		if ( isset( $_POST['rhw_header_image_url'] ) ) {
 			update_option( 'rhw_header_image_url', esc_url_raw( trim( wp_unslash( $_POST['rhw_header_image_url'] ) ) ) );
 		}
+		update_option( 'rhw_recaptcha_enabled', isset( $_POST['rhw_recaptcha_enabled'] ) ? '1' : '0' );
+		if ( isset( $_POST['rhw_recaptcha_type'] ) ) {
+			$rtype = sanitize_key( wp_unslash( $_POST['rhw_recaptcha_type'] ) );
+			update_option( 'rhw_recaptcha_type', in_array( $rtype, array( 'v2_checkbox', 'v3_invisible' ), true ) ? $rtype : 'v2_checkbox' );
+		}
+		if ( isset( $_POST['rhw_recaptcha_site_key'] ) ) {
+			update_option( 'rhw_recaptcha_site_key', sanitize_text_field( trim( wp_unslash( $_POST['rhw_recaptcha_site_key'] ) ) ) );
+		}
+		if ( isset( $_POST['rhw_recaptcha_secret_key'] ) ) {
+			update_option( 'rhw_recaptcha_secret_key', sanitize_text_field( trim( wp_unslash( $_POST['rhw_recaptcha_secret_key'] ) ) ) );
+		}
 		$delete_data = isset( $_POST['rhw_delete_data_on_uninstall'] ) ? '1' : '0';
 		update_option( 'rhw_delete_data_on_uninstall', $delete_data );
 

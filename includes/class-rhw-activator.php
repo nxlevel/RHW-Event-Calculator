@@ -257,6 +257,73 @@ class RHW_Activator {
 			}
 		}
 
+		// Upgrade existing saved forms to v2.6.0 guest count default (0) & updated category names
+		if ( version_compare( $installed_ver, '2.6.0', '<' ) ) {
+			global $wpdb;
+			$forms_table = $wpdb->prefix . 'rhw_forms';
+			if ( $wpdb->get_var( "SHOW TABLES LIKE '{$forms_table}'" ) === $forms_table ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$forms        = $wpdb->get_results( "SELECT id, questions FROM {$forms_table}" );
+				$category_map = array(
+					'Personal Flowers'    => 'Flowers',
+					'Décor & Rentals'     => 'Décor Rental',
+					'Planning & Service'  => 'Planning Service',
+					'Equipment & Rentals' => 'Equipment Rentals',
+				);
+
+				if ( $forms ) {
+					foreach ( $forms as $f ) {
+						$qs = json_decode( $f->questions, true );
+						if ( is_array( $qs ) ) {
+							$changed = false;
+							foreach ( $qs as &$q_item ) {
+								$qid    = isset( $q_item['id'] ) ? $q_item['id'] : '';
+								$qlabel = isset( $q_item['label'] ) ? $q_item['label'] : '';
+								$qtype  = isset( $q_item['type'] ) ? $q_item['type'] : '';
+
+								$is_gc = ! empty( $q_item['is_guest_count'] )
+									|| 'guest_count' === $qid
+									|| ( 'number' === $qtype && preg_match( '/in attendance|guest count|number of guests/i', $qlabel ) );
+
+								if ( $is_gc ) {
+									$q_item['default_value'] = 0;
+									$q_item['min']           = 0;
+									$changed                 = true;
+								}
+
+								if ( ! empty( $q_item['category'] ) && isset( $category_map[ $q_item['category'] ] ) ) {
+									$q_item['category'] = $category_map[ $q_item['category'] ];
+									$changed            = true;
+								}
+
+								if ( ! empty( $q_item['options'] ) && is_array( $q_item['options'] ) ) {
+									foreach ( $q_item['options'] as &$opt_item ) {
+										if ( ! empty( $opt_item['pricing']['category'] ) && isset( $category_map[ $opt_item['pricing']['category'] ] ) ) {
+											$opt_item['pricing']['category'] = $category_map[ $opt_item['pricing']['category'] ];
+											$changed                         = true;
+										}
+									}
+									unset( $opt_item );
+								}
+							}
+							unset( $q_item );
+
+							if ( $changed ) {
+								// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+								$wpdb->update(
+									$forms_table,
+									array( 'questions' => wp_json_encode( $qs ) ),
+									array( 'id' => $f->id ),
+									array( '%s' ),
+									array( '%d' )
+								);
+							}
+						}
+					}
+				}
+			}
+		}
+
 		update_option( 'rhw_calculator_version', RHW_CALCULATOR_VERSION );
 	}
 }

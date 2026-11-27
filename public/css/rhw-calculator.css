@@ -1272,12 +1272,106 @@
 	font-weight: 600;
 }
 
+.rhw-recaptcha-section {
+	margin-top: 22px;
+	padding-top: 18px;
+	border-top: 1px solid var(--rhw-border);
+}
+
+.rhw-recaptcha-box {
+	display: inline-block;
+	max-width: 100%;
+}
+
+.rhw-recaptcha-error {
+	margin-top: 8px;
+}
+
+.rhw-cal-dropdown-wrap {
+	position: relative;
+	display: inline-block;
+	margin: 18px 0;
+	text-align: center;
+}
+
+.rhw-cal-toggle-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 12px 22px;
+	font-weight: 700;
+	font-size: 14px;
+	border-radius: 6px;
+	background: var(--rhw-primary);
+	color: #ffffff;
+	border: none;
+	box-shadow: 0 2px 6px rgba(123, 17, 45, 0.25);
+	cursor: pointer;
+}
+
+.rhw-cal-toggle-btn:hover {
+	background: var(--rhw-primary-dark);
+	color: #ffffff;
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(123, 17, 45, 0.35);
+}
+
+.rhw-cal-caret {
+	font-size: 15px;
+	width: 15px;
+	height: 15px;
+	line-height: 15px;
+}
+
+.rhw-cal-menu {
+	position: relative;
+	margin: 10px auto 0 auto;
+	width: 100%;
+	min-width: 280px;
+	max-width: 340px;
+	background: #ffffff;
+	border: 1px solid var(--rhw-border);
+	border-radius: 8px;
+	box-shadow: var(--rhw-shadow-lg);
+	text-align: left;
+	overflow: hidden;
+	z-index: 20;
+}
+
+.rhw-cal-opt {
+	display: block;
+	padding: 10px 14px;
+	color: var(--rhw-text) !important;
+	text-decoration: none !important;
+	border-bottom: 1px solid #f2ede6;
+	font-size: 13px;
+	transition: background-color 0.15s ease;
+}
+
+.rhw-cal-opt:last-child {
+	border-bottom: none;
+}
+
+.rhw-cal-opt:hover {
+	background: #FAF7F2;
+	color: var(--rhw-primary) !important;
+}
+
+.rhw-cal-opt strong {
+	display: block;
+	font-weight: 600;
+}
+
+.rhw-cal-opt small {
+	display: block;
+	font-size: 11px;
+	color: var(--rhw-text-muted);
+	margin-top: 2px;
+}
+
 .rhw-btn-gcal {
 	transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.rhw-btn-gcal:hover {
-	transform: translateY(-1px);
-	box-shadow: 0 4px 12px rgba(66, 133, 244, 0.35);
 }
 
 @keyframes rhwSpin {

@@ -60,18 +60,38 @@ class RHW_Shortcode {
 		wp_enqueue_style( 'rhw-calculator-css' );
 		wp_enqueue_script( 'rhw-calculator-js' );
 
+		$recaptcha_enabled    = get_option( 'rhw_recaptcha_enabled', '0' );
+		$recaptcha_type       = get_option( 'rhw_recaptcha_type', 'v2_checkbox' );
+		$recaptcha_site_key   = trim( (string) get_option( 'rhw_recaptcha_site_key', '' ) );
+		$recaptcha_secret_key = trim( (string) get_option( 'rhw_recaptcha_secret_key', '' ) );
+		$recaptcha_active     = ( '1' === (string) $recaptcha_enabled && '' !== $recaptcha_site_key && '' !== $recaptcha_secret_key );
+
+		if ( $recaptcha_active ) {
+			if ( 'v3_invisible' === $recaptcha_type ) {
+				wp_enqueue_script( 'rhw-google-recaptcha', 'https://www.google.com/recaptcha/api.js?render=' . rawurlencode( $recaptcha_site_key ), array(), null, true );
+			} else {
+				wp_enqueue_script( 'rhw-google-recaptcha', 'https://www.google.com/recaptcha/api.js?onload=rhwOnRecaptchaLoad&render=explicit', array(), null, true );
+			}
+		}
+
 		// Pass form configuration to JS
 		$script_data = array(
 			'ajax_url'     => admin_url( 'admin-ajax.php' ),
 			'nonce'        => wp_create_nonce( 'rhw_calculator_nonce' ),
 			'form_id'      => $form_id,
 			'form_data'    => $form,
+			'recaptcha'    => array(
+				'enabled'  => $recaptcha_active,
+				'type'     => $recaptcha_type,
+				'site_key' => $recaptcha_active ? $recaptcha_site_key : '',
+			),
 			'i18n'         => array(
-				'calculating'      => esc_html__( 'Updating estimate...', 'rhw-calculator' ),
-				'submitting'       => esc_html__( 'Submitting your request...', 'rhw-calculator' ),
-				'required_warning' => esc_html__( 'Please complete all required fields in this step before proceeding.', 'rhw-calculator' ),
-				'success_title'    => esc_html__( 'Estimate Request Received!', 'rhw-calculator' ),
-				'network_error'    => esc_html__( 'A network error occurred. Please try again.', 'rhw-calculator' ),
+				'calculating'        => esc_html__( 'Updating estimate...', 'rhw-calculator' ),
+				'submitting'         => esc_html__( 'Submitting your request...', 'rhw-calculator' ),
+				'required_warning'   => esc_html__( 'Please complete all required fields in this step before proceeding.', 'rhw-calculator' ),
+				'recaptcha_required' => esc_html__( 'Please complete the reCAPTCHA verification before submitting.', 'rhw-calculator' ),
+				'success_title'      => esc_html__( 'Estimate Request Received!', 'rhw-calculator' ),
+				'network_error'      => esc_html__( 'A network error occurred. Please try again.', 'rhw-calculator' ),
 			),
 		);
 		wp_localize_script( 'rhw-calculator-js', 'rhw_calc_data_' . $form_id, $script_data );

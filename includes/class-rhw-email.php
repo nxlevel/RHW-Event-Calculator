@@ -66,6 +66,10 @@ class RHW_Email {
 			}
 		}
 
+		if ( ! empty( $submission_data['ics_path'] ) && file_exists( $submission_data['ics_path'] ) ) {
+			$attachments[] = $submission_data['ics_path'];
+		}
+
 		return wp_mail( $recipients, $subject, $body, $headers, $attachments );
 	}
 
@@ -111,9 +115,13 @@ class RHW_Email {
 			'From: ' . $sender_name . ' <' . $sender_email . '>',
 		);
 
-		$body = self::get_customer_email_html( $submission_id, $submission_data, $form, $calc );
+		$body        = self::get_customer_email_html( $submission_id, $submission_data, $form, $calc );
+		$attachments = array();
+		if ( ! empty( $submission_data['ics_path'] ) && file_exists( $submission_data['ics_path'] ) ) {
+			$attachments[] = $submission_data['ics_path'];
+		}
 
-		return wp_mail( $submission_data['customer_email'], $subject, $body, $headers );
+		return wp_mail( $submission_data['customer_email'], $subject, $body, $headers, $attachments );
 	}
 
 	/**
@@ -184,8 +192,23 @@ class RHW_Email {
 									<?php if ( ! empty( $submission['google_meet_link'] ) ) : ?>
 										<br><a href="<?php echo esc_url( $submission['google_meet_link'] ); ?>" target="_blank" style="display:inline-block; margin-top:4px; font-size:12px; color:#0f9d58; font-weight:600;">Join Google Meet Video Call</a>
 									<?php endif; ?>
-									<?php if ( ! empty( $submission['gcal_link'] ) ) : ?>
-										<br><a href="<?php echo esc_url( $submission['gcal_link'] ); ?>" target="_blank" style="display:inline-block; margin-top:4px; font-size:12px; color:#4285F4; font-weight:600;">Open / Add in Google Calendar</a>
+									<?php
+									$cal_links    = isset( $submission['calendar_links'] ) && is_array( $submission['calendar_links'] ) ? $submission['calendar_links'] : array();
+									$primary_cal  = ! empty( $cal_links['ics'] ) ? $cal_links['ics'] : ( ! empty( $submission['gcal_link'] ) ? $submission['gcal_link'] : '' );
+									if ( ! empty( $primary_cal ) ) :
+									?>
+										<br><a href="<?php echo esc_url( $primary_cal ); ?>" target="_blank" style="display:inline-block; margin-top:4px; font-size:12px; color:#7B112D; font-weight:600;">Add Appointment To Calendar</a>
+										<?php if ( ! empty( $cal_links ) ) : ?>
+											<div style="margin-top: 4px; font-size: 11px; color: #555;">
+												<a href="<?php echo esc_url( ! empty( $submission['gcal_link'] ) ? $submission['gcal_link'] : $cal_links['google'] ); ?>" target="_blank" style="color:#4285F4; text-decoration:underline;">Google Calendar</a>
+												&nbsp;&bull;&nbsp;
+												<a href="<?php echo esc_url( $cal_links['ics'] ); ?>" target="_blank" style="color:#555; text-decoration:underline;">Apple / Outlook (.ics)</a>
+												&nbsp;&bull;&nbsp;
+												<a href="<?php echo esc_url( $cal_links['outlook'] ); ?>" target="_blank" style="color:#0078D4; text-decoration:underline;">Outlook.com</a>
+												&nbsp;&bull;&nbsp;
+												<a href="<?php echo esc_url( $cal_links['yahoo'] ); ?>" target="_blank" style="color:#6001D2; text-decoration:underline;">Yahoo Calendar</a>
+											</div>
+										<?php endif; ?>
 									<?php endif; ?>
 								</td>
 							</tr>
@@ -348,10 +371,28 @@ class RHW_Email {
 									<br><strong>Google Meet Link:</strong> <a href="<?php echo esc_url( $submission['google_meet_link'] ); ?>" target="_blank" style="color: #0f9d58; font-weight: bold;"><?php echo esc_html( $submission['google_meet_link'] ); ?></a>
 								<?php endif; ?>
 							</p>
-							<?php if ( ! empty( $submission['gcal_link'] ) ) : ?>
-								<a href="<?php echo esc_url( $submission['gcal_link'] ); ?>" target="_blank" style="display: inline-block; background: #4285F4; color: #ffffff !important; text-decoration: none; padding: 10px 18px; border-radius: 4px; font-weight: bold; font-size: 13px;">
-									+ View / Add in Google Calendar
+							<?php
+							$cal_links   = isset( $submission['calendar_links'] ) && is_array( $submission['calendar_links'] ) ? $submission['calendar_links'] : array();
+							$primary_cal = ! empty( $cal_links['ics'] ) ? $cal_links['ics'] : ( ! empty( $submission['gcal_link'] ) ? $submission['gcal_link'] : '' );
+							if ( ! empty( $primary_cal ) ) :
+							?>
+								<a href="<?php echo esc_url( $primary_cal ); ?>" target="_blank" style="display: inline-block; background: #7B112D; color: #ffffff !important; text-decoration: none; padding: 10px 18px; border-radius: 4px; font-weight: bold; font-size: 13px;">
+									Add Appointment To Calendar
 								</a>
+								<?php if ( ! empty( $cal_links ) ) : ?>
+									<p style="margin: 10px 0 0 0; font-size: 12px; color: #555;">
+										Choose your calendar:
+										<a href="<?php echo esc_url( $cal_links['google'] ); ?>" target="_blank" style="color: #7B112D; font-weight: 600;">Google Calendar</a>
+										&nbsp;&bull;&nbsp;
+										<a href="<?php echo esc_url( $cal_links['ics'] ); ?>" target="_blank" style="color: #7B112D; font-weight: 600;">Apple / iCal / Outlook App (.ics)</a>
+										&nbsp;&bull;&nbsp;
+										<a href="<?php echo esc_url( $cal_links['outlook'] ); ?>" target="_blank" style="color: #7B112D; font-weight: 600;">Outlook.com</a>
+										&nbsp;&bull;&nbsp;
+										<a href="<?php echo esc_url( $cal_links['office365'] ); ?>" target="_blank" style="color: #7B112D; font-weight: 600;">Office 365</a>
+										&nbsp;&bull;&nbsp;
+										<a href="<?php echo esc_url( $cal_links['yahoo'] ); ?>" target="_blank" style="color: #7B112D; font-weight: 600;">Yahoo Calendar</a>
+									</p>
+								<?php endif; ?>
 							<?php endif; ?>
 						</div>
 					<?php else : ?>

@@ -8,6 +8,17 @@
 (function($) {
 	'use strict';
 
+	window.rhwRecaptchaQueue = window.rhwRecaptchaQueue || [];
+	window.rhwOnRecaptchaLoad = function() {
+		window.rhwRecaptchaReady = true;
+		while (window.rhwRecaptchaQueue.length) {
+			const fn = window.rhwRecaptchaQueue.shift();
+			if (typeof fn === 'function') {
+				try { fn(); } catch (e) {}
+			}
+		}
+	};
+
 	$(document).ready(function() {
 		$('.rhw-calc-wrapper').each(function() {
 			initCalculatorInstance($(this));
@@ -107,6 +118,7 @@
 		ensureNativeStickyAncestors();
 
 		// Initial setup
+		let recaptchaWidgetId = null;
 		initNumberSteppers();
 		initAttractionGuestSync();
 		initFileUploads();
@@ -114,8 +126,33 @@
 		initDateTimePicker();
 		initDatePickerRates();
 		initConsultationScheduler();
+		initRecaptchaWidget();
 		evaluateConditionalLogic();
 		runLiveCalculation();
+
+		function initRecaptchaWidget() {
+			const rc = config.recaptcha || {};
+			if (!rc.enabled || rc.type === 'v3_invisible' || !rc.site_key) return;
+			const $box = $wrapper.find('.rhw-recaptcha-box');
+			if (!$box.length) return;
+
+			const renderBox = function() {
+				if (recaptchaWidgetId !== null) return;
+				if (!window.grecaptcha || typeof window.grecaptcha.render !== 'function') return;
+				recaptchaWidgetId = window.grecaptcha.render($box[0], {
+					sitekey: rc.site_key,
+					callback: function() {
+						$wrapper.find('.rhw-recaptcha-error').hide().text('');
+					}
+				});
+			};
+
+			if (window.grecaptcha && typeof window.grecaptcha.render === 'function') {
+				renderBox();
+			} else {
+				window.rhwRecaptchaQueue.push(renderBox);
+			}
+		}
 
 		// Event Bindings
 		$wrapper.on('change input', 'input, select, textarea', function() {
@@ -420,6 +457,45 @@
 			}, 300);
 		}
 
+		function validateQuestionGroup($group, q) {
+			if (!q || !q.required) return true;
+
+			let fieldVal = '';
+			if (q.type === 'radio') {
+				fieldVal = $group.find('input[type="radio"]:checked').val() || '';
+			} else if (q.type === 'checkboxes' || q.type === 'checkbox') {
+				fieldVal = $group.find('input[type="checkbox"]:checked').length > 0 ? 'checked' : '';
+			} else if (q.type === 'select' || q.type === 'country' || q.id === 'lead_country') {
+				fieldVal = $group.find('select').val() || '';
+			} else if (q.type === 'datetime' || (q.type === 'date' && $group.find('.rhw-datetime-picker-wrap').length)) {
+				const dVal = $group.find('.rhw-date-input').val();
+				const tVal = $group.find('.rhw-time-input').val();
+				fieldVal = (dVal && tVal) ? `${dVal} at ${tVal}` : (dVal || '');
+			} else {
+				fieldVal = $.trim($group.find('input, textarea').val());
+			}
+
+			if (!fieldVal) {
+				$group.addClass('has-error');
+				$group.find('.rhw-error-message').text(q.label + ' is required.').fadeIn(200);
+				return false;
+			}
+			if (q.type === 'number') {
+				const numVal = parseFloat(fieldVal);
+				if (isNaN(numVal) || numVal <= 0) {
+					$group.addClass('has-error');
+					$group.find('.rhw-error-message').text(q.label + ' must be greater than 0.').fadeIn(200);
+					return false;
+				}
+			}
+			if (q.type === 'email' && !isValidEmail(fieldVal)) {
+				$group.addClass('has-error');
+				$group.find('.rhw-error-message').text('Please enter a valid email address.').fadeIn(200);
+				return false;
+			}
+			return true;
+		}
+
 		/**
 		 * Validate required fields in the active step & Jump to missed question (Requirement 5)
 		 */
@@ -437,34 +513,8 @@
 				const qid = $group.data('qid');
 				const q = questions.find(item => item.id === qid);
 
-				if (!q || !q.required) return;
-
-				let fieldVal = '';
-				if (q.type === 'radio') {
-					fieldVal = $group.find('input[type="radio"]:checked').val() || '';
-				} else if (q.type === 'checkboxes' || q.type === 'checkbox') {
-					fieldVal = $group.find('input[type="checkbox"]:checked').length > 0 ? 'checked' : '';
-				} else if (q.type === 'select' || q.type === 'country' || q.id === 'lead_country') {
-					fieldVal = $group.find('select').val() || '';
-				} else if (q.type === 'datetime' || (q.type === 'date' && $group.find('.rhw-datetime-picker-wrap').length)) {
-					const dVal = $group.find('.rhw-date-input').val();
-					const tVal = $group.find('.rhw-time-input').val();
-					fieldVal = (dVal && tVal) ? `${dVal} at ${tVal}` : (dVal || '');
-				} else {
-					fieldVal = $.trim($group.find('input, textarea').val());
-				}
-
-				if (!fieldVal) {
+				if (!validateQuestionGroup($group, q)) {
 					isValid = false;
-					$group.addClass('has-error');
-					$group.find('.rhw-error-message').text(q.label + ' is required.').fadeIn(200);
-					if (!$firstErrorGroup) {
-						$firstErrorGroup = $group;
-					}
-				} else if (q.type === 'email' && !isValidEmail(fieldVal)) {
-					isValid = false;
-					$group.addClass('has-error');
-					$group.find('.rhw-error-message').text('Please enter a valid email address.').fadeIn(200);
 					if (!$firstErrorGroup) {
 						$firstErrorGroup = $group;
 					}
@@ -510,33 +560,8 @@
 					if (!q || !q.required) return;
 					if (isVenueOnly && q.requires_full_service) return;
 
-					let fieldVal = '';
-					if (q.type === 'radio') {
-						fieldVal = $group.find('input[type="radio"]:checked').val() || '';
-					} else if (q.type === 'checkboxes' || q.type === 'checkbox') {
-						fieldVal = $group.find('input[type="checkbox"]:checked').length > 0 ? 'checked' : '';
-					} else if (q.type === 'select' || q.type === 'country' || q.id === 'lead_country') {
-						fieldVal = $group.find('select').val() || '';
-					} else if (q.type === 'datetime' || (q.type === 'date' && $group.find('.rhw-datetime-picker-wrap').length)) {
-						const dVal = $group.find('.rhw-date-input').val();
-						const tVal = $group.find('.rhw-time-input').val();
-						fieldVal = (dVal && tVal) ? `${dVal} at ${tVal}` : (dVal || '');
-					} else {
-						fieldVal = $.trim($group.find('input, textarea').val());
-					}
-
-					if (!fieldVal) {
+					if (!validateQuestionGroup($group, q)) {
 						isValid = false;
-						$group.addClass('has-error');
-						$group.find('.rhw-error-message').text(q.label + ' is required.').fadeIn(200);
-						if (!firstErrorGroup) {
-							firstErrorGroup = $group;
-							errorStep = stepIdx;
-						}
-					} else if (q.type === 'email' && !isValidEmail(fieldVal)) {
-						isValid = false;
-						$group.addClass('has-error');
-						$group.find('.rhw-error-message').text('Please enter a valid email address.').fadeIn(200);
 						if (!firstErrorGroup) {
 							firstErrorGroup = $group;
 							errorStep = stepIdx;
@@ -583,8 +608,10 @@
 		function initNumberSteppers() {
 			$wrapper.find('.rhw-num-minus').on('click', function() {
 				const $input = $(this).siblings('.rhw-number-input');
-				const min = parseInt($input.attr('min'), 10) || 1;
-				let val = parseInt($input.val(), 10) || min;
+				const parsedMin = parseInt($input.attr('min'), 10);
+				const min = isNaN(parsedMin) ? 0 : parsedMin;
+				const parsedVal = parseInt($input.val(), 10);
+				const val = isNaN(parsedVal) ? min : parsedVal;
 				if (val > min) {
 					$input.val(val - 1).trigger('input');
 				}
@@ -592,8 +619,12 @@
 
 			$wrapper.find('.rhw-num-plus').on('click', function() {
 				const $input = $(this).siblings('.rhw-number-input');
-				const max = parseInt($input.attr('max'), 10) || 1000;
-				let val = parseInt($input.val(), 10) || 1;
+				const parsedMax = parseInt($input.attr('max'), 10);
+				const max = isNaN(parsedMax) ? 1000 : parsedMax;
+				const parsedMin = parseInt($input.attr('min'), 10);
+				const min = isNaN(parsedMin) ? 0 : parsedMin;
+				const parsedVal = parseInt($input.val(), 10);
+				const val = isNaN(parsedVal) ? min : parsedVal;
 				if (val < max) {
 					$input.val(val + 1).trigger('input');
 				}
@@ -613,7 +644,8 @@
 			const gcQuestion = findGuestCountQuestion();
 			const qid = gcQuestion ? gcQuestion.id : 'guest_count';
 			const raw = answers ? answers[qid] : $wrapper.find(`#rhw_field_${qid}`).val();
-			return Math.max(1, parseInt(raw, 10) || 75);
+			const parsed = parseInt(raw, 10);
+			return isNaN(parsed) ? 0 : Math.max(0, parsed);
 		}
 
 		function isParticipantCountQuestion(q) {
@@ -664,14 +696,16 @@
 
 				const isFocused = (document.activeElement === $input[0]);
 				const userEdited = $input.data('user-edited') === true;
+				const parsedMin = parseInt($input.attr('min'), 10);
+				const minAllowed = isNaN(parsedMin) ? 0 : parsedMin;
 				const currentVal = parseInt($input.val(), 10);
 
 				if (!userEdited) {
 					if (!isFocused) {
 						$input.val(guestCount);
 					}
-				} else if (!isFocused && (isNaN(currentVal) || currentVal < 1)) {
-					$input.val(1);
+				} else if (!isFocused && (isNaN(currentVal) || currentVal < minAllowed)) {
+					$input.val(minAllowed);
 				}
 			});
 		}
@@ -689,9 +723,12 @@
 
 				$input.on('change blur', function() {
 					let val = parseInt($(this).val(), 10);
-					const maxAttr = parseInt($(this).attr('max'), 10) || 1000;
-					if (isNaN(val) || val < 1) {
-						val = 1;
+					const parsedMin = parseInt($(this).attr('min'), 10);
+					const minAttr = isNaN(parsedMin) ? 0 : parsedMin;
+					const parsedMax = parseInt($(this).attr('max'), 10);
+					const maxAttr = isNaN(parsedMax) ? 1000 : parsedMax;
+					if (isNaN(val) || val < minAttr) {
+						val = minAttr;
 					} else if (val > maxAttr) {
 						val = maxAttr;
 					}
@@ -834,7 +871,7 @@
 			questions.forEach(q => {
 				if (isParticipantCountQuestion(q)) {
 					const syncedVal = parseInt($wrapper.find(`#rhw_field_${q.id}`).val(), 10);
-					if (!isNaN(syncedVal) && syncedVal > 0) {
+					if (!isNaN(syncedVal) && syncedVal >= 0) {
 						answers[q.id] = String(syncedVal);
 					}
 				}
@@ -1048,12 +1085,12 @@
 			const existingKeys = lineItems.map(i => i.key);
 
 			// Chairs ($7 / guest)
-			if (!existingKeys.includes('gold_chiavari_chairs')) {
+			if (guestCount > 0 && !existingKeys.includes('gold_chiavari_chairs')) {
 				lineItems.push({
 					key: 'gold_chiavari_chairs',
 					order: decorOrder,
 					title: 'Gold Chiavari Chairs / Ivory Cushions',
-					category: 'Décor & Rentals',
+					category: 'Décor Rental',
 					amount: guestCount * 7.00,
 					note: `${guestCount} chairs × $7.00`
 				});
@@ -1065,7 +1102,7 @@
 					key: 'signing_table',
 					order: decorOrder,
 					title: 'Signing Table with Linen',
-					category: 'Décor & Rentals',
+					category: 'Décor Rental',
 					amount: 45.00,
 					note: 'Flat fee'
 				});
@@ -1077,13 +1114,13 @@
 			}
 
 			// Bistro Cocktail Tables ($55 ea, 1 per 15 guests)
-			if (!existingKeys.includes('bistro_tables')) {
+			if (guestCount > 0 && !existingKeys.includes('bistro_tables')) {
 				const bQty = Math.ceil(guestCount / 15);
 				lineItems.push({
 					key: 'bistro_tables',
 					order: decorOrder,
 					title: 'Cocktail Bistro Tables w/ Linen',
-					category: 'Décor & Rentals',
+					category: 'Décor Rental',
 					amount: bQty * 55.00,
 					note: `${bQty} tables × $55.00`
 				});
@@ -1095,44 +1132,44 @@
 					key: 'sweetheart_table',
 					order: decorOrder,
 					title: 'Sweetheart Table with Linen',
-					category: 'Décor & Rentals',
+					category: 'Décor Rental',
 					amount: 60.00,
 					note: 'Flat fee'
 				});
 			}
 
 			// 10-seater Dining Tables ($55 ea, ceil(guests/10))
-			if (!existingKeys.includes('dining_tables')) {
+			if (guestCount > 0 && !existingKeys.includes('dining_tables')) {
 				const tQty = Math.ceil(guestCount / 10);
 				lineItems.push({
 					key: 'dining_tables',
 					order: decorOrder,
 					title: '10-Seater Rounds / Trestle Tables',
-					category: 'Décor & Rentals',
+					category: 'Décor Rental',
 					amount: tQty * 55.00,
 					note: `${tQty} tables × $55.00`
 				});
 			}
 
 			// Charger Plates ($8 / guest)
-			if (!existingKeys.includes('charger_plates')) {
+			if (guestCount > 0 && !existingKeys.includes('charger_plates')) {
 				lineItems.push({
 					key: 'charger_plates',
 					order: decorOrder,
 					title: 'Charger Plates',
-					category: 'Décor & Rentals',
+					category: 'Décor Rental',
 					amount: guestCount * 8.00,
 					note: `${guestCount} settings × $8.00`
 				});
 			}
 
 			// Napkins ($5 / guest)
-			if (!existingKeys.includes('napkins')) {
+			if (guestCount > 0 && !existingKeys.includes('napkins')) {
 				lineItems.push({
 					key: 'napkins',
 					order: decorOrder,
 					title: 'Dinner Napkins',
-					category: 'Décor & Rentals',
+					category: 'Décor Rental',
 					amount: guestCount * 5.00,
 					note: `${guestCount} napkins × $5.00`
 				});
@@ -1144,7 +1181,7 @@
 					key: 'setup_cleanup_fee',
 					order: decorOrder,
 					title: 'Setup, Breakdown & Cleanup Fee',
-					category: 'Planning & Service',
+					category: 'Planning Service',
 					amount: 350.00,
 					note: 'Standard fee'
 				});
@@ -1228,6 +1265,24 @@
 				return;
 			}
 
+			const rc = config.recaptcha || {};
+			const $rcSection = $wrapper.find('.rhw-recaptcha-section');
+			const $rcError = $wrapper.find('.rhw-recaptcha-error');
+			$rcError.hide().text('');
+
+			// Verify v2 checkbox locally before submitting
+			if (rc.enabled && rc.type !== 'v3_invisible' && $rcSection.length) {
+				const token = (window.grecaptcha && recaptchaWidgetId !== null) ? window.grecaptcha.getResponse(recaptchaWidgetId) : '';
+				if (!token) {
+					goToStep(totalSteps - 1);
+					$rcError.text(i18n.recaptcha_required || 'Please complete the reCAPTCHA verification before submitting.').fadeIn(200);
+					$('html, body').animate({
+						scrollTop: $rcSection.offset().top - 170
+					}, 350);
+					return;
+				}
+			}
+
 			isSubmitting = true;
 			const $submitBtn = $wrapper.find('.rhw-btn-submit');
 			$submitBtn.addClass('loading').prop('disabled', true);
@@ -1255,48 +1310,83 @@
 			if (consultDate) formData.append('consultation_date', consultDate);
 			if (consultTime) formData.append('consultation_time', consultTime);
 
-			$.ajax({
-				url: config.ajax_url,
-				type: 'POST',
-				data: formData,
-				processData: false,
-				contentType: false,
-				dataType: 'json',
-				success: function(response) {
-					if (response.success) {
-						showSuccessState(response.data);
-					} else {
-						if (response.data && response.data.slot_taken) {
-							$wrapper.trigger('rhw:refresh_calendar');
-						}
-						if (response.data && response.data.errors) {
-							const firstErrQid = Object.keys(response.data.errors)[0];
-							const $errField = $wrapper.find(`.rhw-form-group[data-qid="${firstErrQid}"]`);
-							if ($errField.length) {
-								const stepIdx = $errField.closest('.rhw-step-pane').data('step-index');
-								if (stepIdx !== undefined) {
-									goToStep(parseInt(stepIdx, 10));
-								}
-								$errField.addClass('has-error');
-								$errField.find('.rhw-error-message').text(response.data.errors[firstErrQid]).fadeIn(200);
-								$('html, body').animate({
-									scrollTop: $errField.offset().top - 170
-								}, 350, function() {
-									$errField.find('input, select, textarea').first().focus();
-								});
+			const dispatchAjax = function() {
+				$.ajax({
+					url: config.ajax_url,
+					type: 'POST',
+					data: formData,
+					processData: false,
+					contentType: false,
+					dataType: 'json',
+					success: function(response) {
+						if (response.success) {
+							showSuccessState(response.data);
+						} else {
+							if (recaptchaWidgetId !== null && window.grecaptcha && typeof window.grecaptcha.reset === 'function') {
+								window.grecaptcha.reset(recaptchaWidgetId);
 							}
+							if (response.data && response.data.slot_taken) {
+								$wrapper.trigger('rhw:refresh_calendar');
+							}
+							if (response.data && response.data.recaptcha_error) {
+								goToStep(totalSteps - 1);
+								if ($rcError.length) {
+									$rcError.text(response.data.message || (i18n.recaptcha_required || 'Please complete reCAPTCHA verification.')).fadeIn(200);
+								}
+							}
+							if (response.data && response.data.errors) {
+								const firstErrQid = Object.keys(response.data.errors)[0];
+								const $errField = $wrapper.find(`.rhw-form-group[data-qid="${firstErrQid}"]`);
+								if ($errField.length) {
+									const stepIdx = $errField.closest('.rhw-step-pane').data('step-index');
+									if (stepIdx !== undefined) {
+										goToStep(parseInt(stepIdx, 10));
+									}
+									$errField.addClass('has-error');
+									$errField.find('.rhw-error-message').text(response.data.errors[firstErrQid]).fadeIn(200);
+									$('html, body').animate({
+										scrollTop: $errField.offset().top - 170
+									}, 350, function() {
+										$errField.find('input, select, textarea').first().focus();
+									});
+								}
+							}
+							alert(response.data && response.data.message ? response.data.message : (i18n.network_error || 'An error occurred.'));
+							$submitBtn.removeClass('loading').prop('disabled', false);
+							isSubmitting = false;
 						}
-						alert(response.data && response.data.message ? response.data.message : (i18n.network_error || 'An error occurred.'));
+					},
+					error: function() {
+						if (recaptchaWidgetId !== null && window.grecaptcha && typeof window.grecaptcha.reset === 'function') {
+							window.grecaptcha.reset(recaptchaWidgetId);
+						}
+						alert(i18n.network_error || 'A network error occurred. Please try again.');
 						$submitBtn.removeClass('loading').prop('disabled', false);
 						isSubmitting = false;
 					}
-				},
-				error: function() {
-					alert(i18n.network_error || 'A network error occurred. Please try again.');
-					$submitBtn.removeClass('loading').prop('disabled', false);
-					isSubmitting = false;
+				});
+			};
+
+			if (rc.enabled && rc.type === 'v3_invisible' && rc.site_key && window.grecaptcha && typeof window.grecaptcha.execute === 'function') {
+				window.grecaptcha.ready(function() {
+					window.grecaptcha.execute(rc.site_key, { action: 'rhw_submit_quote' }).then(function(token) {
+						formData.set('g-recaptcha-response', token);
+						dispatchAjax();
+					}, function() {
+						alert(i18n.recaptcha_required || 'Unable to verify reCAPTCHA. Please try again.');
+						$submitBtn.removeClass('loading').prop('disabled', false);
+						isSubmitting = false;
+					});
+				});
+			} else {
+				if (rc.enabled && rc.type !== 'v3_invisible' && window.grecaptcha && recaptchaWidgetId !== null) {
+					const token = window.grecaptcha.getResponse(recaptchaWidgetId);
+					if (token) {
+						formData.set('g-recaptcha-response', token);
+					}
 				}
-			});
+				dispatchAjax();
+			}
 		}
 
 		/**
@@ -1330,11 +1420,44 @@
 				$successView.find('.rhw-success-meet-row').hide();
 			}
 
-			if (data.gcal_link) {
-				$successView.find('.rhw-btn-gcal').attr('href', data.gcal_link);
-				$successView.find('.rhw-gcal-sync-wrap').show();
+			const calLinks = data.calendar_links || {};
+			const $calWrap = $successView.find('.rhw-gcal-sync-wrap');
+			if (calLinks && (calLinks.ics || calLinks.google || data.gcal_link)) {
+				if (!calLinks.google && data.gcal_link) {
+					calLinks.google = data.gcal_link;
+				}
+				$calWrap.find('.rhw-cal-opt').each(function() {
+					const key = $(this).data('cal');
+					if (calLinks[key]) {
+						$(this).attr('href', calLinks[key]).show();
+					} else {
+						$(this).hide();
+					}
+				});
+
+				const $toggleBtn = $calWrap.find('.rhw-cal-toggle-btn');
+				const $menu = $calWrap.find('.rhw-cal-menu');
+				$toggleBtn.off('click').on('click', function(e) {
+					e.preventDefault();
+					e.stopPropagation();
+					const opening = !$menu.is(':visible');
+					$menu.toggle(opening);
+					$toggleBtn.attr('aria-expanded', opening ? 'true' : 'false');
+				});
+				$menu.off('click', '.rhw-cal-opt').on('click', '.rhw-cal-opt', function() {
+					$menu.hide();
+					$toggleBtn.attr('aria-expanded', 'false');
+				});
+				$(document).off('click.rhwCalMenu_' + formId).on('click.rhwCalMenu_' + formId, function(e) {
+					if (!$(e.target).closest($calWrap).length) {
+						$menu.hide();
+						$toggleBtn.attr('aria-expanded', 'false');
+					}
+				});
+
+				$calWrap.show();
 			} else {
-				$successView.find('.rhw-gcal-sync-wrap').hide();
+				$calWrap.hide();
 			}
 
 			$successView.fadeIn(300);

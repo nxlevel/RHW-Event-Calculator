@@ -655,4 +655,188 @@ class RHW_Calendar_Manager {
 			return 0;
 		}
 	}
+
+	/**
+	 * Sign an HMAC token for downloading an appointment .ics file without expiring in email.
+	 */
+	public static function sign_ics_token( $submission_id, $customer_email ) {
+		$payload = intval( $submission_id ) . '|' . strtolower( trim( (string) $customer_email ) );
+		return hash_hmac( 'sha256', $payload, wp_salt( 'auth' ) );
+	}
+
+	/**
+	 * Verify a signed .ics download token cleanly.
+	 */
+	public static function verify_ics_token( $submission_id, $customer_email, $sig ) {
+		if ( empty( $sig ) || empty( $submission_id ) ) {
+			return false;
+		}
+		$expected = self::sign_ics_token( $submission_id, $customer_email );
+		return hash_equals( $expected, (string) $sig );
+	}
+
+	/**
+	 * Escape text according to RFC 5545 iCalendar rules.
+	 */
+	private static function escape_ics_text( $text ) {
+		$str = str_replace( array( "\r\n", "\r" ), "\n", (string) $text );
+		$str = str_replace( array( '\\', ';', ',' ), array( '\\\\', '\;', '\,' ), $str );
+		return str_replace( "\n", '\n', $str );
+	}
+
+	/**
+	 * Fold long iCalendar content lines to <= 74 octets as required by RFC 5545.
+	 */
+	private static function fold_ics_line( $line ) {
+		$out = '';
+		while ( strlen( $line ) > 74 ) {
+			$cut = 74;
+			while ( $cut > 0 && ( ord( $line[ $cut ] ) & 0xC0 ) === 0x80 ) {
+				$cut--;
+			}
+			if ( 0 === $cut ) {
+				$cut = 74;
+			}
+			$out .= substr( $line, 0, $cut ) . "\r\n ";
+			$line = substr( $line, $cut );
+		}
+		return $out . $line;
+	}
+
+	/**
+	 * Build an RFC 5545 .ics calendar file string for any popular calendar client
+	 * (Apple Calendar, Outlook Desktop/App, Google Calendar, Yahoo, Thunderbird, Android).
+	 */
+	public static function build_ics_content( $title, $start_ts, $end_ts, $details = '', $location = '', $uid = '' ) {
+		if ( empty( $location ) ) {
+			$location = 'Rose Hall Weddings & Events (Phone / Video Consultation), Montego Bay, Jamaica';
+		}
+		if ( empty( $uid ) ) {
+			$host = wp_parse_url( home_url(), PHP_URL_HOST );
+			$uid  = md5( $title . '|' . $start_ts ) . '@' . ( $host ? $host : 'rosehall.com' );
+		}
+
+		$lines = array(
+			'BEGIN:VCALENDAR',
+			'VERSION:2.0',
+			'PRODID:-//Rose Hall Weddings & Events//Event Cost Calculator//EN',
+			'CALSCALE:GREGORIAN',
+			'METHOD:PUBLISH',
+			'BEGIN:VEVENT',
+			'UID:' . $uid,
+			'DTSTAMP:' . gmdate( 'Ymd\THis\Z' ),
+			'DTSTART:' . gmdate( 'Ymd\THis\Z', $start_ts ),
+			'DTEND:' . gmdate( 'Ymd\THis\Z', $end_ts ),
+			self::fold_ics_line( 'SUMMARY:' . self::escape_ics_text( $title ) ),
+			self::fold_ics_line( 'LOCATION:' . self::escape_ics_text( $location ) ),
+			self::fold_ics_line( 'DESCRIPTION:' . self::escape_ics_text( $details ) ),
+			'STATUS:CONFIRMED',
+			'END:VEVENT',
+			'END:VCALENDAR',
+		);
+
+		return implode( "\r\n", $lines ) . "\r\n";
+	}
+
+	/**
+	 * Build direct "Add Appointment To Calendar" URLs for all popular calendar providers.
+	 */
+	public static function build_calendar_links( $submission_id, $customer_email, $title, $start_ts, $end_ts, $details, $location = '', $google_override_url = '' ) {
+		if ( empty( $location ) ) {
+			$location = 'Rose Hall Weddings & Events (Phone / Video Consultation), Montego Bay, Jamaica';
+		}
+
+		$iso_start = gmdate( 'Y-m-d\TH:i:s\Z', $start_ts );
+		$iso_end   = gmdate( 'Y-m-d\TH:i:s\Z', $end_ts );
+		$cmp_start = gmdate( 'Ymd\THis\Z', $start_ts );
+		$cmp_end   = gmdate( 'Ymd\THis\Z', $end_ts );
+
+		$ics_url = add_query_arg(
+			array(
+				'action' => 'rhw_download_ics',
+				'sid'    => intval( $submission_id ),
+				'sig'    => self::sign_ics_token( $submission_id, $customer_email ),
+			),
+			admin_url( 'admin-ajax.php' )
+		);
+
+		$google_url = ! empty( $google_override_url )
+			? $google_override_url
+			: RHW_Google_Calendar::build_manual_gcal_url( $title, $start_ts, $end_ts, $details, $location );
+
+		$outlook_url = 'https://outlook.live.com/calendar/0/action/compose?' . http_build_query(
+			array(
+				'rru'      => 'addevent',
+				'startdt'  => $iso_start,
+				'enddt'    => $iso_end,
+				'subject'  => $title,
+				'body'     => $details,
+				'location' => $location,
+			)
+		);
+
+		$office365_url = 'https://outlook.office.com/calendar/0/action/compose?' . http_build_query(
+			array(
+				'rru'      => 'addevent',
+				'startdt'  => $iso_start,
+				'enddt'    => $iso_end,
+				'subject'  => $title,
+				'body'     => $details,
+				'location' => $location,
+			)
+		);
+
+		$yahoo_url = 'https://calendar.yahoo.com/?' . http_build_query(
+			array(
+				'v'      => '60',
+				'title'  => $title,
+				'st'     => $cmp_start,
+				'et'     => $cmp_end,
+				'desc'   => $details,
+				'in_loc' => $location,
+			)
+		);
+
+		return array(
+			'ics'       => $ics_url,
+			'google'    => $google_url,
+			'outlook'   => $outlook_url,
+			'office365' => $office365_url,
+			'yahoo'     => $yahoo_url,
+		);
+	}
+
+	/**
+	 * Write a temporary .ics calendar invite file for attaching to notification emails.
+	 */
+	public static function save_temp_ics_file( $submission_id, $ics_content ) {
+		if ( empty( $ics_content ) ) {
+			return false;
+		}
+		$up  = wp_upload_dir();
+		$dir = ! empty( $up['basedir'] ) ? trailingslashit( $up['basedir'] ) . 'rhw-quotes-tmp' : rtrim( sys_get_temp_dir(), '/\\' ) . '/rhw-quotes-tmp';
+		if ( ! is_dir( $dir ) ) {
+			wp_mkdir_p( $dir );
+		}
+		if ( ! is_dir( $dir ) || ! is_writable( $dir ) ) {
+			return false;
+		}
+
+		// Clean stale .ics files (> 1 hour)
+		$old_files = @glob( trailingslashit( $dir ) . '*.ics' );
+		if ( is_array( $old_files ) ) {
+			$cutoff = time() - 3600;
+			foreach ( $old_files as $f ) {
+				if ( @filemtime( $f ) < $cutoff ) {
+					@unlink( $f );
+				}
+			}
+		}
+
+		$filepath = trailingslashit( $dir ) . 'Rose-Hall-Consultation-' . intval( $submission_id ) . '.ics';
+		if ( false !== @file_put_contents( $filepath, $ics_content ) && file_exists( $filepath ) ) {
+			return $filepath;
+		}
+		return false;
+	}
 }

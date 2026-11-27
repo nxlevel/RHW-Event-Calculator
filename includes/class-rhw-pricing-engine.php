@@ -38,7 +38,7 @@ class RHW_Pricing_Engine {
 		}
 
 		// 1. Determine Guest Count
-		$guest_count = 75; // Default reference from proposal
+		$guest_count = 0;
 		foreach ( $questions as $q ) {
 			$q_type  = isset( $q['type'] ) ? $q['type'] : '';
 			$q_label = isset( $q['label'] ) ? $q['label'] : '';
@@ -48,8 +48,8 @@ class RHW_Pricing_Engine {
 
 			if ( $is_gc ) {
 				$qid = isset( $q['id'] ) ? $q['id'] : '';
-				if ( $qid && isset( $answers[ $qid ] ) && is_numeric( $answers[ $qid ] ) && intval( $answers[ $qid ] ) > 0 ) {
-					$guest_count = intval( $answers[ $qid ] );
+				if ( $qid && isset( $answers[ $qid ] ) && is_numeric( $answers[ $qid ] ) ) {
+					$guest_count = max( 0, intval( $answers[ $qid ] ) );
 				}
 				break;
 			}
@@ -368,12 +368,12 @@ class RHW_Pricing_Engine {
 		$existing_keys = wp_list_pluck( $line_items, 'key' );
 
 		// 1. Gold Chiavari Chairs / Ivory Cushions ($7.00 per guest)
-		if ( ! in_array( 'gold_chiavari_chairs', $existing_keys, true ) ) {
+		if ( $guest_count > 0 && ! in_array( 'gold_chiavari_chairs', $existing_keys, true ) ) {
 			$cost          = $guest_count * 7.00;
 			$line_items[]  = array(
 				'key'        => 'gold_chiavari_chairs',
 				'title'      => 'Gold Chiavari Chairs with Ivory Cushions',
-				'category'   => 'Décor & Rentals',
+				'category'   => 'Décor Rental',
 				'quantity'   => $guest_count,
 				'unit_price' => 7.00,
 				'amount'     => $cost,
@@ -388,7 +388,7 @@ class RHW_Pricing_Engine {
 			$line_items[] = array(
 				'key'        => 'signing_table',
 				'title'      => 'Ceremony Signing Table with Linen',
-				'category'   => 'Décor & Rentals',
+				'category'   => 'Décor Rental',
 				'quantity'   => 1,
 				'unit_price' => 45.00,
 				'amount'     => 45.00,
@@ -404,13 +404,13 @@ class RHW_Pricing_Engine {
 		}
 
 		// 3. Cocktail Bistro Tables with Linen ($55.00 each, 1 per 15 guests)
-		if ( ! in_array( 'bistro_tables', $existing_keys, true ) ) {
+		if ( $guest_count > 0 && ! in_array( 'bistro_tables', $existing_keys, true ) ) {
 			$qty          = (int) ceil( $guest_count / 15 );
 			$cost         = $qty * 55.00;
 			$line_items[] = array(
 				'key'        => 'bistro_tables',
 				'title'      => 'Cocktail Bistro Tables with Ivory Linen',
-				'category'   => 'Décor & Rentals',
+				'category'   => 'Décor Rental',
 				'quantity'   => $qty,
 				'unit_price' => 55.00,
 				'amount'     => $cost,
@@ -425,7 +425,7 @@ class RHW_Pricing_Engine {
 			$line_items[] = array(
 				'key'        => 'sweetheart_table',
 				'title'      => 'Sweetheart Table with Linen',
-				'category'   => 'Décor & Rentals',
+				'category'   => 'Décor Rental',
 				'quantity'   => 1,
 				'unit_price' => 60.00,
 				'amount'     => 60.00,
@@ -436,13 +436,13 @@ class RHW_Pricing_Engine {
 		}
 
 		// 5. Dining Tables (10-seater rounds or trestles @ $55.00 each)
-		if ( ! in_array( 'dining_tables', $existing_keys, true ) ) {
+		if ( $guest_count > 0 && ! in_array( 'dining_tables', $existing_keys, true ) ) {
 			$qty          = (int) ceil( $guest_count / 10 );
 			$cost         = $qty * 55.00;
 			$line_items[] = array(
 				'key'        => 'dining_tables',
 				'title'      => '10-Seater Rounds or Trestle Tables with Linen',
-				'category'   => 'Décor & Rentals',
+				'category'   => 'Décor Rental',
 				'quantity'   => $qty,
 				'unit_price' => 55.00,
 				'amount'     => $cost,
@@ -453,12 +453,12 @@ class RHW_Pricing_Engine {
 		}
 
 		// 6. Charger Plates ($8.00 per guest)
-		if ( ! in_array( 'charger_plates', $existing_keys, true ) ) {
+		if ( $guest_count > 0 && ! in_array( 'charger_plates', $existing_keys, true ) ) {
 			$cost         = $guest_count * 8.00;
 			$line_items[] = array(
 				'key'        => 'charger_plates',
 				'title'      => 'Charger Plates',
-				'category'   => 'Décor & Rentals',
+				'category'   => 'Décor Rental',
 				'quantity'   => $guest_count,
 				'unit_price' => 8.00,
 				'amount'     => $cost,
@@ -469,12 +469,12 @@ class RHW_Pricing_Engine {
 		}
 
 		// 7. Napkins ($5.00 per guest)
-		if ( ! in_array( 'napkins', $existing_keys, true ) ) {
+		if ( $guest_count > 0 && ! in_array( 'napkins', $existing_keys, true ) ) {
 			$cost         = $guest_count * 5.00;
 			$line_items[] = array(
 				'key'        => 'napkins',
 				'title'      => 'Dinner Napkins',
-				'category'   => 'Décor & Rentals',
+				'category'   => 'Décor Rental',
 				'quantity'   => $guest_count,
 				'unit_price' => 5.00,
 				'amount'     => $cost,
@@ -489,7 +489,7 @@ class RHW_Pricing_Engine {
 			$line_items[] = array(
 				'key'        => 'setup_cleanup_fee',
 				'title'      => 'Setup, Breakdown and Clean-up Service',
-				'category'   => 'Planning & Service',
+				'category'   => 'Planning Service',
 				'quantity'   => 1,
 				'unit_price' => 350.00,
 				'amount'     => 350.00,
