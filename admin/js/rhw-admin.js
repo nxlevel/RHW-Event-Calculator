@@ -259,9 +259,10 @@
 						<input type="text" class="widefat rhw-edit-q-help" value="${escapeHtml(q.help_text || '')}">
 					</div>
 
-					<div style="display:flex; gap:16px; margin-bottom: 12px; align-items:center;">
+					<div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom: 12px; align-items:center;">
 						<label><input type="checkbox" class="rhw-edit-q-req" ${q.required ? 'checked' : ''}> <strong>Required Field</strong></label>
 						<label><input type="checkbox" class="rhw-edit-q-gc" ${q.is_guest_count ? 'checked' : ''}> Controls Event Guest Count</label>
+						<label style="${q.type === 'number' ? '' : 'display:none;'}"><input type="checkbox" class="rhw-edit-q-pc" ${q.is_participant_count ? 'checked' : ''}> Sync Default to Guest Count &amp; Multiply Parent Per-Person Items</label>
 					</div>
 
 					<!-- Options & Pricing Table for choice types -->
@@ -450,6 +451,10 @@
 
 		$card.find('.rhw-edit-q-gc').on('change', function() {
 			q.is_guest_count = $(this).is(':checked');
+		});
+
+		$card.find('.rhw-edit-q-pc').on('change', function() {
+			q.is_participant_count = $(this).is(':checked');
 		});
 
 		$card.find('.rhw-edit-unit-price').on('input', function() {

@@ -111,27 +111,77 @@ $form      = RHW_Form_Manager::get_form( $submission['form_id'] );
 				<h2 class="rhw-card-title"><?php esc_html_e( 'Full Questionnaire Responses', 'rhw-calculator' ); ?></h2>
 				<p class="description"><?php esc_html_e( 'Detailed answers provided by the client during questionnaire submission.', 'rhw-calculator' ); ?></p>
 
+				<?php
+				$form_questions = ( ! empty( $form['questions'] ) && is_array( $form['questions'] ) ) ? $form['questions'] : array();
+				$questions_map  = array();
+				foreach ( $form_questions as $fq ) {
+					if ( ! empty( $fq['id'] ) ) {
+						$questions_map[ $fq['id'] ] = $fq;
+					}
+				}
+				?>
+
 				<table class="form-table rhw-answers-table" style="margin-top: 15px;">
 					<?php foreach ( $answers as $key => $val ) : ?>
 						<?php
-						$display_label = ucwords( str_replace( '_', ' ', $key ) );
-						$is_url = is_string( $val ) && filter_var( $val, FILTER_VALIDATE_URL );
+						$matched_q = isset( $questions_map[ $key ] ) ? $questions_map[ $key ] : null;
+						$suffix    = '';
+						if ( ! $matched_q && '_date' === substr( $key, -5 ) ) {
+							$base_key  = substr( $key, 0, -5 );
+							$matched_q = isset( $questions_map[ $base_key ] ) ? $questions_map[ $base_key ] : null;
+							$suffix    = ' (' . __( 'Date', 'rhw-calculator' ) . ')';
+						} elseif ( ! $matched_q && '_time' === substr( $key, -5 ) ) {
+							$base_key  = substr( $key, 0, -5 );
+							$matched_q = isset( $questions_map[ $base_key ] ) ? $questions_map[ $base_key ] : null;
+							$suffix    = ' (' . __( 'Time', 'rhw-calculator' ) . ')';
+						}
+
+						if ( $matched_q && ! empty( $matched_q['label'] ) ) {
+							$display_label = $matched_q['label'] . $suffix;
+						} else {
+							$display_label = ucwords( str_replace( '_', ' ', $key ) );
+						}
+
+						// Map option keys to their actual choice labels when available
+						$opt_map = array();
+						if ( $matched_q && ! empty( $matched_q['options'] ) && is_array( $matched_q['options'] ) ) {
+							foreach ( $matched_q['options'] as $opt ) {
+								if ( isset( $opt['value'] ) && '' !== $opt['value'] && ! empty( $opt['label'] ) ) {
+									$opt_map[ (string) $opt['value'] ] = $opt['label'];
+								}
+							}
+						}
+
+						$is_url   = is_string( $val ) && filter_var( $val, FILTER_VALIDATE_URL );
 						$is_image = $is_url && preg_match( '/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i', $val );
 						?>
 						<tr>
-							<th scope="row" style="width: 35%; font-weight: 600; color: #555;"><?php echo esc_html( $display_label ); ?></th>
+							<th scope="row" style="width: 38%; font-weight: 600; color: #555;"><?php echo esc_html( $display_label ); ?></th>
 							<td>
 								<?php if ( $is_image ) : ?>
 									<div>
-										<a href="<?php echo esc_url( $val ); ?>" target="_blank">
+										<a href="<?php echo esc_url( $val ); ?>" target="_blank" rel="noopener noreferrer">
 											<img src="<?php echo esc_url( $val ); ?>" style="max-width: 200px; max-height: 150px; border-radius: 4px; border: 1px solid #ddd; padding: 3px;" alt="Client Upload">
 										</a>
-										<div><a href="<?php echo esc_url( $val ); ?>" target="_blank" class="button button-small" style="margin-top: 6px;">View Full Image &rarr;</a></div>
+										<div><a href="<?php echo esc_url( $val ); ?>" target="_blank" rel="noopener noreferrer" class="button button-small" style="margin-top: 6px;"><?php esc_html_e( 'View Full Image', 'rhw-calculator' ); ?> &rarr;</a></div>
 									</div>
 								<?php elseif ( $is_url ) : ?>
-									<a href="<?php echo esc_url( $val ); ?>" target="_blank"><?php echo esc_html( $val ); ?></a>
+									<a href="<?php echo esc_url( $val ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $val ); ?></a>
+								<?php elseif ( is_array( $val ) ) : ?>
+									<?php
+									$mapped_vals = array_map(
+										function( $v ) use ( $opt_map ) {
+											return isset( $opt_map[ (string) $v ] ) ? $opt_map[ (string) $v ] : $v;
+										},
+										$val
+									);
+									echo nl2br( esc_html( implode( ', ', $mapped_vals ) ) );
+									?>
 								<?php else : ?>
-									<?php echo nl2br( esc_html( is_array( $val ) ? implode( ', ', $val ) : $val ) ); ?>
+									<?php
+									$display_val = isset( $opt_map[ (string) $val ] ) ? $opt_map[ (string) $val ] : $val;
+									echo nl2br( esc_html( $display_val ) );
+									?>
 								<?php endif; ?>
 							</td>
 						</tr>

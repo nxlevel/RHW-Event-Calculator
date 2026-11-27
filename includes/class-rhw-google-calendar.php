@@ -73,7 +73,7 @@ class RHW_Google_Calendar {
 	 * Get the OAuth redirect URI to register in Google Cloud Console.
 	 */
 	public static function get_redirect_uri() {
-		return admin_url( 'admin.php?page=rhw-calculator-calendar&rhw_gcal_action=oauth_callback' );
+		return admin_url( 'admin.php?page=rhw-calculator-settings&rhw_gcal_action=oauth_callback' );
 	}
 
 	/**

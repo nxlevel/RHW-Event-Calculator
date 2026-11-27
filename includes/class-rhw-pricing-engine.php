@@ -40,9 +40,15 @@ class RHW_Pricing_Engine {
 		// 1. Determine Guest Count
 		$guest_count = 75; // Default reference from proposal
 		foreach ( $questions as $q ) {
-			if ( ! empty( $q['is_guest_count'] ) || ( isset( $q['id'] ) && 'guest_count' === $q['id'] ) ) {
-				$qid = $q['id'];
-				if ( isset( $answers[ $qid ] ) && is_numeric( $answers[ $qid ] ) && intval( $answers[ $qid ] ) > 0 ) {
+			$q_type  = isset( $q['type'] ) ? $q['type'] : '';
+			$q_label = isset( $q['label'] ) ? $q['label'] : '';
+			$is_gc   = ! empty( $q['is_guest_count'] )
+				|| ( isset( $q['id'] ) && 'guest_count' === $q['id'] )
+				|| ( 'number' === $q_type && preg_match( '/in attendance|guest count|number of guests/i', $q_label ) );
+
+			if ( $is_gc ) {
+				$qid = isset( $q['id'] ) ? $q['id'] : '';
+				if ( $qid && isset( $answers[ $qid ] ) && is_numeric( $answers[ $qid ] ) && intval( $answers[ $qid ] ) > 0 ) {
 					$guest_count = intval( $answers[ $qid ] );
 				}
 				break;
@@ -120,7 +126,7 @@ class RHW_Pricing_Engine {
 					foreach ( $q['options'] as $opt ) {
 						$opt_val = isset( $opt['value'] ) ? $opt['value'] : ( isset( $opt['label'] ) ? $opt['label'] : '' );
 						if ( $opt_val === $selected_val ) {
-							$item = self::evaluate_option_pricing( $opt, $guest_count, $answers, $q, $is_weekend );
+							$item = self::evaluate_option_pricing( $opt, $guest_count, $answers, $q, $is_weekend, $questions_by_id );
 							if ( $item && $item['amount'] > 0 ) {
 								$line_items[] = $item;
 								$subtotal    += $item['amount'];
@@ -141,7 +147,7 @@ class RHW_Pricing_Engine {
 					foreach ( $q['options'] as $opt ) {
 						$opt_val = isset( $opt['value'] ) ? $opt['value'] : ( isset( $opt['label'] ) ? $opt['label'] : '' );
 						if ( in_array( $opt_val, $selected_vals, true ) ) {
-							$item = self::evaluate_option_pricing( $opt, $guest_count, $answers, $q, $is_weekend );
+							$item = self::evaluate_option_pricing( $opt, $guest_count, $answers, $q, $is_weekend, $questions_by_id );
 							if ( $item && $item['amount'] > 0 ) {
 								$line_items[] = $item;
 								$subtotal    += $item['amount'];
@@ -217,7 +223,7 @@ class RHW_Pricing_Engine {
 	/**
 	 * Evaluate pricing for a single selected option with Weekday/Weekend support.
 	 */
-	private static function evaluate_option_pricing( $opt, $guest_count, $answers, $question, $is_weekend = false ) {
+	private static function evaluate_option_pricing( $opt, $guest_count, $answers, $question, $is_weekend = false, $questions_by_id = array() ) {
 		if ( ! isset( $opt['pricing'] ) || ! is_array( $opt['pricing'] ) ) {
 			return null;
 		}
@@ -257,13 +263,44 @@ class RHW_Pricing_Engine {
 				break;
 
 			case 'per_guest':
-				// Check if this is an attraction tour where custom participant count is specified (up to Section 1 guest count)!
+				// Check if a conditional / participant count number field overrides guest count for this question
 				$multiplier = $guest_count;
-				if ( isset( $question['id'] ) && 'attraction_selection' === $question['id'] ) {
-					if ( isset( $answers['attraction_guests'] ) && is_numeric( $answers['attraction_guests'] ) && intval( $answers['attraction_guests'] ) > 0 ) {
-						$multiplier = min( intval( $answers['attraction_guests'] ), $guest_count );
+				$qid        = isset( $question['id'] ) ? $question['id'] : '';
+				$q_label    = isset( $question['label'] ) ? $question['label'] : '';
+				$pq_id      = '';
+
+				foreach ( $questions_by_id as $cand_id => $cand_q ) {
+					if ( ! isset( $cand_q['type'] ) || 'number' !== $cand_q['type'] ) {
+						continue;
+					}
+					if ( ! self::is_question_visible( $cand_q, $answers, $questions_by_id ) ) {
+						continue;
+					}
+					$cond_field = ( ! empty( $cand_q['conditional']['enabled'] ) && ! empty( $cand_q['conditional']['field'] ) ) ? $cand_q['conditional']['field'] : '';
+					$cand_label = isset( $cand_q['label'] ) ? $cand_q['label'] : '';
+
+					if ( $qid && $cond_field === $qid ) {
+						$pq_id = $cand_id;
+						break;
+					}
+					if ( ! empty( $cand_q['is_participant_count'] ) && ( ! $cond_field || $cond_field === $qid ) ) {
+						$pq_id = $cand_id;
+						break;
+					}
+					if ( ( 'attraction_selection' === $qid || stripos( $q_label, 'attraction' ) !== false ) && ( 'attraction_guests' === $cand_id || preg_match( '/participat|tour or golf|golfing/i', $cand_label ) ) ) {
+						$pq_id = $cand_id;
+						break;
 					}
 				}
+
+				if ( ! $pq_id && 'attraction_selection' === $qid && isset( $answers['attraction_guests'] ) ) {
+					$pq_id = 'attraction_guests';
+				}
+
+				if ( $pq_id && isset( $answers[ $pq_id ] ) && is_numeric( $answers[ $pq_id ] ) && intval( $answers[ $pq_id ] ) > 0 ) {
+					$multiplier = intval( $answers[ $pq_id ] );
+				}
+
 				$qty   = $multiplier;
 				$total = $amount * $multiplier;
 				$note  = sprintf( '%d persons × $%s', $multiplier, number_format( $amount, 2 ) );

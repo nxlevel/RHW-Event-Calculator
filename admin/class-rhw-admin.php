@@ -104,6 +104,10 @@ class RHW_Admin {
 			return;
 		}
 
+		if ( strpos( $hook, 'rhw-calculator-settings' ) !== false ) {
+			wp_enqueue_media();
+		}
+
 		wp_enqueue_style(
 			'rhw-admin-css',
 			RHW_CALCULATOR_PLUGIN_URL . 'admin/css/rhw-admin.css',
@@ -289,10 +293,13 @@ class RHW_Admin {
 		if ( isset( $_POST['rhw_default_notification_emails'] ) ) {
 			update_option( 'rhw_default_notification_emails', sanitize_text_field( wp_unslash( $_POST['rhw_default_notification_emails'] ) ) );
 		}
+		if ( isset( $_POST['rhw_header_image_url'] ) ) {
+			update_option( 'rhw_header_image_url', esc_url_raw( trim( wp_unslash( $_POST['rhw_header_image_url'] ) ) ) );
+		}
 		$delete_data = isset( $_POST['rhw_delete_data_on_uninstall'] ) ? '1' : '0';
 		update_option( 'rhw_delete_data_on_uninstall', $delete_data );
 
-		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-settings&updated=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-settings&tab=general&updated=1' ) );
 		exit;
 	}
 
@@ -350,13 +357,13 @@ class RHW_Admin {
 	}
 
 	/**
-	 * Intercept Google OAuth2 callback on Calendar page before headers are sent.
+	 * Intercept Google OAuth2 callback on Settings (or legacy Calendar) page before headers are sent.
 	 */
 	public function handle_gcal_oauth_callback() {
 		if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
-		if ( empty( $_GET['page'] ) || 'rhw-calculator-calendar' !== $_GET['page'] ) {
+		if ( empty( $_GET['page'] ) || ! in_array( $_GET['page'], array( 'rhw-calculator-settings', 'rhw-calculator-calendar' ), true ) ) {
 			return;
 		}
 		if ( empty( $_GET['rhw_gcal_action'] ) || 'oauth_callback' !== $_GET['rhw_gcal_action'] ) {
@@ -365,7 +372,7 @@ class RHW_Admin {
 
 		if ( ! empty( $_GET['error'] ) ) {
 			$err_msg = sanitize_text_field( wp_unslash( $_GET['error'] ) );
-			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_error=' . rawurlencode( $err_msg ) ) );
+			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-settings&tab=google_sync&gcal_error=' . rawurlencode( $err_msg ) ) );
 			exit;
 		}
 
@@ -374,11 +381,11 @@ class RHW_Admin {
 
 		$res = RHW_Google_Calendar::handle_oauth_callback( $code, $state );
 		if ( is_wp_error( $res ) ) {
-			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_error=' . rawurlencode( $res->get_error_message() ) ) );
+			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-settings&tab=google_sync&gcal_error=' . rawurlencode( $res->get_error_message() ) ) );
 			exit;
 		}
 
-		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_connected=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-settings&tab=google_sync&gcal_connected=1' ) );
 		exit;
 	}
 
@@ -444,7 +451,7 @@ class RHW_Admin {
 
 		RHW_Calendar_Manager::save_settings( $_POST );
 
-		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=schedule&schedule_saved=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-settings&tab=schedule&schedule_saved=1' ) );
 		exit;
 	}
 
@@ -467,11 +474,11 @@ class RHW_Admin {
 				wp_redirect( $auth_url );
 				exit;
 			}
-			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_error=' . rawurlencode( __( 'Please enter your Google Client ID and Client Secret before connecting.', 'rhw-calculator' ) ) ) );
+			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-settings&tab=google_sync&gcal_error=' . rawurlencode( __( 'Please enter your Google Client ID and Client Secret before connecting.', 'rhw-calculator' ) ) ) );
 			exit;
 		}
 
-		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_saved=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-settings&tab=google_sync&gcal_saved=1' ) );
 		exit;
 	}
 
@@ -486,7 +493,7 @@ class RHW_Admin {
 		check_admin_referer( 'rhw_disconnect_gcal' );
 		RHW_Google_Calendar::disconnect();
 
-		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_disconnected=1' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-settings&tab=google_sync&gcal_disconnected=1' ) );
 		exit;
 	}
 

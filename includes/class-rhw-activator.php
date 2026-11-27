@@ -197,8 +197,8 @@ class RHW_Activator {
 		// Ensure bookings table has new Google Calendar sync columns
 		self::ensure_bookings_table_exists( true );
 
-		// Upgrade existing saved forms to v2.3.0 Section 5 attraction_guests rule (if previously pointing to include_attractions)
-		if ( version_compare( $installed_ver, '2.3.0', '<' ) ) {
+		// Upgrade existing saved forms to v2.4.0 Section 5 attraction participant rule & flag
+		if ( version_compare( $installed_ver, '2.4.0', '<' ) ) {
 			global $wpdb;
 			$forms_table = $wpdb->prefix . 'rhw_forms';
 			if ( $wpdb->get_var( "SHOW TABLES LIKE '{$forms_table}'" ) === $forms_table ) {
@@ -208,20 +208,36 @@ class RHW_Activator {
 					foreach ( $forms as $f ) {
 						$qs = json_decode( $f->questions, true );
 						if ( is_array( $qs ) ) {
+							// Locate attractions selection field ID in this form
+							$attr_sel_id = 'attraction_selection';
+							foreach ( $qs as $q_scan ) {
+								if ( isset( $q_scan['label'] ) && false !== stripos( $q_scan['label'], 'Which attractions' ) && ! empty( $q_scan['id'] ) ) {
+									$attr_sel_id = $q_scan['id'];
+									break;
+								}
+							}
+
 							$changed = false;
 							foreach ( $qs as &$q_item ) {
-								if ( isset( $q_item['id'] ) && 'attraction_guests' === $q_item['id'] ) {
-									if ( ! isset( $q_item['conditional'] ) || ( isset( $q_item['conditional']['field'] ) && 'include_attractions' === $q_item['conditional']['field'] ) ) {
+								$qid     = isset( $q_item['id'] ) ? $q_item['id'] : '';
+								$qlabel  = isset( $q_item['label'] ) ? $q_item['label'] : '';
+								$qtype   = isset( $q_item['type'] ) ? $q_item['type'] : '';
+								$is_tour = ( 'attraction_guests' === $qid ) || ( 'number' === $qtype && false !== stripos( $qlabel, 'participating in the tour' ) );
+
+								if ( $is_tour ) {
+									if ( empty( $q_item['is_participant_count'] ) ) {
+										$q_item['is_participant_count'] = true;
+										$changed                        = true;
+									}
+									if ( ! isset( $q_item['conditional'] ) || empty( $q_item['conditional']['field'] ) || 'include_attractions' === $q_item['conditional']['field'] ) {
 										$q_item['conditional'] = array(
 											'enabled'  => true,
-											'field'    => 'attraction_selection',
+											'field'    => $attr_sel_id,
 											'operator' => 'not_empty',
 											'value'    => '',
 										);
-										$q_item['max']           = 1000;
-										$q_item['default_value'] = 75;
-										$q_item['help_text']     = 'Specify how many persons will be taking the tour or golfing (defaults to your Section 1 guest count or less; pricing updates per person).';
-										$changed                 = true;
+										$q_item['max'] = 1000;
+										$changed       = true;
 									}
 								}
 							}

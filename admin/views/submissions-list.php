@@ -34,7 +34,7 @@ $export_url = wp_nonce_url( admin_url( 'admin.php?rhw_action=export_csv' ), 'rhw
 	<div class="rhw-header-bar">
 		<div>
 			<h1 class="wp-heading-inline"><?php esc_html_e( 'Wedding & Event Leads', 'rhw-calculator' ); ?></h1>
-			<p class="rhw-header-subtitle"><?php esc_html_e( 'Review incoming quote requests, estimated investments, and prospective client contact details.', 'rhw-calculator' ); ?></p>
+			<p class="rhw-header-subtitle"><?php esc_html_e( 'Review incoming leads and estimates', 'rhw-calculator' ); ?></p>
 		</div>
 		<div>
 			<a href="<?php echo esc_url( $export_url ); ?>" class="button button-secondary">
@@ -106,9 +106,6 @@ $export_url = wp_nonce_url( admin_url( 'admin.php?rhw_action=export_csv' ), 'rhw
 							<td>
 								<a href="<?php echo esc_url( admin_url( 'admin.php?page=rhw-calculator-submissions&action=view&id=' . $sub->id ) ); ?>" class="button button-small">
 									<?php esc_html_e( 'View Details', 'rhw-calculator' ); ?>
-								</a>
-								<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=rhw_delete_submission&id=' . $sub->id ), 'rhw_delete_submission_' . $sub->id ) ); ?>" class="button button-small button-link-delete" onclick="return confirm('<?php esc_attr_e( 'Delete this lead?', 'rhw-calculator' ); ?>');">
-									<?php esc_html_e( 'Delete', 'rhw-calculator' ); ?>
 								</a>
 							</td>
 						</tr>

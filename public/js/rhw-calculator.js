@@ -601,55 +601,104 @@
 		}
 
 		/**
-		 * Sync Section 5 Attraction Participant Count with Section 1 Guest Count (default <= Section 1 guest count)
+		 * Sync Section 5 Attraction Participant Count & conditional number fields with Section 1 Guest Count
 		 */
+		function findGuestCountQuestion() {
+			return questions.find(q => q.is_guest_count)
+				|| questions.find(q => q.id === 'guest_count')
+				|| questions.find(q => q.type === 'number' && /in attendance|guest count|number of guests/i.test(q.label || ''));
+		}
+
 		function getSection1GuestCount(answers) {
-			const gcQuestion = questions.find(q => q.is_guest_count) || questions.find(q => q.id === 'guest_count');
+			const gcQuestion = findGuestCountQuestion();
 			const qid = gcQuestion ? gcQuestion.id : 'guest_count';
 			const raw = answers ? answers[qid] : $wrapper.find(`#rhw_field_${qid}`).val();
 			return Math.max(1, parseInt(raw, 10) || 75);
 		}
 
-		function syncAttractionGuestLimits(guestCount) {
-			const $attrInput = $wrapper.find('#rhw_field_attraction_guests');
-			if (!$attrInput.length) return;
-
-			$attrInput.attr('max', guestCount);
-			const isFocused = (document.activeElement === $attrInput[0]);
-			const userEdited = $attrInput.data('user-edited') === true;
-			const currentVal = parseInt($attrInput.val(), 10);
-
-			if (!userEdited) {
-				if (!isFocused) {
-					$attrInput.val(guestCount);
+		function isParticipantCountQuestion(q) {
+			if (!q || q.type !== 'number') return false;
+			if (q.is_participant_count || q.id === 'attraction_guests') return true;
+			if (/participat|tour or golf|golfing/i.test(q.label || '')) return true;
+			if (q.conditional && q.conditional.enabled && q.conditional.field) {
+				const parentQ = questions.find(pq => pq.id === q.conditional.field);
+				if (parentQ && parentQ.options && parentQ.options.some(o => o.pricing && o.pricing.type === 'per_guest')) {
+					return true;
 				}
-			} else if (!isFocused && (isNaN(currentVal) || currentVal < 1)) {
-				$attrInput.val(guestCount);
-			} else if (!isFocused && currentVal > guestCount) {
-				$attrInput.val(guestCount);
 			}
+			return false;
+		}
+
+		function findParticipantQuestionFor(parentQuestion) {
+			if (!parentQuestion) return null;
+			const pid = parentQuestion.id;
+			const pLabel = parentQuestion.label || '';
+
+			// 1. Direct conditional child of parentQuestion
+			let match = questions.find(q =>
+				q.type === 'number' && q.conditional && q.conditional.enabled && q.conditional.field === pid
+			);
+			if (match) return match;
+
+			// 2. Question explicitly marked is_participant_count without a conflicting parent
+			match = questions.find(q =>
+				q.type === 'number' && q.is_participant_count && (!q.conditional || !q.conditional.enabled || q.conditional.field === pid)
+			);
+			if (match) return match;
+
+			// 3. Attraction / Tour matching by ID or label
+			if (pid === 'attraction_selection' || /attraction/i.test(pLabel)) {
+				match = questions.find(q =>
+					q.type === 'number' && (q.id === 'attraction_guests' || /participat|tour or golf|golfing/i.test(q.label || ''))
+				);
+				if (match) return match;
+			}
+			return null;
+		}
+
+		function syncAttractionGuestLimits(guestCount) {
+			questions.forEach(q => {
+				if (!isParticipantCountQuestion(q)) return;
+				const $input = $wrapper.find(`#rhw_field_${q.id}`);
+				if (!$input.length) return;
+
+				const isFocused = (document.activeElement === $input[0]);
+				const userEdited = $input.data('user-edited') === true;
+				const currentVal = parseInt($input.val(), 10);
+
+				if (!userEdited) {
+					if (!isFocused) {
+						$input.val(guestCount);
+					}
+				} else if (!isFocused && (isNaN(currentVal) || currentVal < 1)) {
+					$input.val(1);
+				}
+			});
 		}
 
 		function initAttractionGuestSync() {
-			const $attrInput = $wrapper.find('#rhw_field_attraction_guests');
-			if (!$attrInput.length) return;
+			questions.forEach(q => {
+				if (!isParticipantCountQuestion(q)) return;
+				const $input = $wrapper.find(`#rhw_field_${q.id}`);
+				if (!$input.length) return;
 
-			// Track manual changes by the user (typing or +/- steppers)
-			$attrInput.on('input', function() {
-				$(this).data('user-edited', true);
-			});
+				// Track manual changes by the user (typing or +/- steppers)
+				$input.on('input', function() {
+					$(this).data('user-edited', true);
+				});
 
-			$attrInput.on('change blur', function() {
-				const maxAllowed = getSection1GuestCount(collectAnswers());
-				let val = parseInt($(this).val(), 10);
-				if (isNaN(val) || val < 1) {
-					val = 1;
-				} else if (val > maxAllowed) {
-					val = maxAllowed;
-				}
-				if (String(val) !== String($(this).val())) {
-					$(this).val(val).trigger('input');
-				}
+				$input.on('change blur', function() {
+					let val = parseInt($(this).val(), 10);
+					const maxAttr = parseInt($(this).attr('max'), 10) || 1000;
+					if (isNaN(val) || val < 1) {
+						val = 1;
+					} else if (val > maxAttr) {
+						val = maxAttr;
+					}
+					if (String(val) !== String($(this).val())) {
+						$(this).val(val);
+					}
+				});
 			});
 
 			syncAttractionGuestLimits(getSection1GuestCount(collectAnswers()));
@@ -662,6 +711,7 @@
 			const answers = collectAnswers();
 			const serviceType = answers.service_type || '';
 			const isVenueOnly = (serviceType === 'venue_only' || (typeof serviceType === 'string' && serviceType.indexOf('Venue Only') !== -1));
+			const guestCount = getSection1GuestCount(answers);
 
 			// Run up to 4 passes so nested/chained conditions (e.g., include_attractions -> attraction_selection -> attraction_guests) resolve cleanly
 			for (let pass = 0; pass < 4; pass++) {
@@ -720,6 +770,15 @@
 
 					if (shouldShow && wasHidden) {
 						$field.removeClass('rhw-hidden').show();
+						// When revealing a participant count field, default to Section 1 guest count if not edited yet
+						const qid = $field.data('qid');
+						const qObj = questions.find(item => item.id === qid);
+						if (isParticipantCountQuestion(qObj)) {
+							const $numInput = $field.find('.rhw-number-input');
+							if ($numInput.length && $numInput.data('user-edited') !== true) {
+								$numInput.val(guestCount);
+							}
+						}
 						changed = true;
 					} else if (!shouldShow && !wasHidden) {
 						$field.addClass('rhw-hidden').hide();
@@ -772,10 +831,14 @@
 			$wrapper.find('#rhw-live-guest-display').text(guestCount);
 
 			syncAttractionGuestLimits(guestCount);
-			const syncedAttrVal = parseInt($wrapper.find('#rhw_field_attraction_guests').val(), 10);
-			if (!isNaN(syncedAttrVal) && syncedAttrVal > 0) {
-				answers.attraction_guests = String(Math.min(syncedAttrVal, guestCount));
-			}
+			questions.forEach(q => {
+				if (isParticipantCountQuestion(q)) {
+					const syncedVal = parseInt($wrapper.find(`#rhw_field_${q.id}`).val(), 10);
+					if (!isNaN(syncedVal) && syncedVal > 0) {
+						answers[q.id] = String(syncedVal);
+					}
+				}
+			});
 
 			const isWeekend = isDateWeekend(answers.event_date);
 			const serviceType = answers.service_type || 'full_service';
@@ -906,12 +969,16 @@
 					break;
 
 				case 'per_guest':
-					// Attraction Participant Count (up to Section 1 guest count)
+					// Check for linked conditional / participant count number field
 					let count = guestCount;
-					if (question.id === 'attraction_selection') {
-						const tourGuests = parseInt(answers.attraction_guests, 10);
-						if (tourGuests > 0) {
-							count = Math.min(tourGuests, guestCount);
+					const linkedPq = findParticipantQuestionFor(question);
+					if (linkedPq) {
+						const $pqField = $wrapper.find(`.rhw-q-field[data-qid="${linkedPq.id}"]`);
+						if (!$pqField.length || !$pqField.hasClass('rhw-hidden')) {
+							const pqVal = parseInt(answers[linkedPq.id], 10);
+							if (pqVal > 0) {
+								count = pqVal;
+							}
 						}
 					}
 					qty = count;

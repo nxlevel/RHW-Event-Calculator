@@ -79,7 +79,12 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 
 	<!-- Header Banner -->
 	<header class="rhw-calc-header">
-		<div class="rhw-calc-badge"><?php esc_html_e( 'Rose Hall Weddings & Events', 'rhw-calculator' ); ?></div>
+		<?php $header_image_url = get_option( 'rhw_header_image_url', '' ); ?>
+		<?php if ( ! empty( $header_image_url ) ) : ?>
+			<div class="rhw-calc-header-image-wrap">
+				<img src="<?php echo esc_url( $header_image_url ); ?>" alt="<?php echo esc_attr( $form['title'] ); ?>" class="rhw-calc-header-image" width="270" height="270">
+			</div>
+		<?php endif; ?>
 		<h2 class="rhw-calc-title"><?php echo esc_html( $form['title'] ); ?></h2>
 		<?php if ( ! empty( $form['description'] ) ) : ?>
 			<p class="rhw-calc-description"><?php echo esc_html( $form['description'] ); ?></p>

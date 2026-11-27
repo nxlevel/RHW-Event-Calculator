@@ -52,18 +52,19 @@
 	border-bottom: 1px solid var(--rhw-border);
 }
 
-.rhw-calc-badge {
-	display: inline-block;
-	background: #FAF5EB;
-	color: var(--rhw-primary);
-	border: 1px solid var(--rhw-accent);
-	font-size: 12px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 2px;
-	padding: 4px 14px;
-	border-radius: 20px;
-	margin-bottom: 10px;
+.rhw-calc-header-image-wrap {
+	display: flex;
+	justify-content: center;
+	margin: 0 auto 14px auto;
+}
+
+.rhw-calc-header-image {
+	width: 270px;
+	height: 270px;
+	max-width: 100%;
+	object-fit: contain;
+	border-radius: var(--rhw-radius);
+	display: block;
 }
 
 .rhw-calc-title {

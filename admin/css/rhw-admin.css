@@ -410,171 +410,321 @@ hr.wp-header-end {
 	padding: 24px;
 }
 
-/* Admin Calendar Grid & Day Inspector (v2.3.0) */
-.rhw-admin-cal-layout {
+/* Admin Calendar Day Inspector & Compact Grid (Screenshot Design) */
+.rhw-cal-top-nav {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 16px 0;
+	flex-wrap: wrap;
+}
+
+.rhw-cal-date-controls {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.rhw-today-pill-btn {
+	background: #f1f5f9;
+	border: 1px solid #e2e8f0;
+	border-radius: 20px;
+	padding: 6px 16px;
+	font-size: 13px;
+	font-weight: 600;
+	color: #334155;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.rhw-today-pill-btn:hover {
+	background: #e2e8f0;
+}
+
+.rhw-day-nav-group {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 15px;
+	font-weight: 600;
+	color: #1e293b;
+}
+
+.rhw-icon-circle-btn {
+	background: #ffffff;
+	border: 1px solid #e2e8f0;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	color: #475569;
+	font-size: 14px;
+}
+
+.rhw-icon-circle-btn:hover {
+	background: #f8fafc;
+	border-color: #cbd5e1;
+	color: #0f172a;
+}
+
+.rhw-admin-cal-split {
 	display: grid;
-	grid-template-columns: 1.55fr 1fr;
+	grid-template-columns: 1.45fr 1fr;
 	gap: 24px;
 	align-items: start;
 }
 
-@media (max-width: 1100px) {
-	.rhw-admin-cal-layout {
+@media (max-width: 1024px) {
+	.rhw-admin-cal-split {
 		grid-template-columns: 1fr;
 	}
 }
 
-.rhw-admin-cal-toolbar {
+.rhw-slots-panel-card {
+	background: #ffffff;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+	overflow: hidden;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.rhw-slots-admin-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.rhw-slots-admin-table thead th {
+	padding: 12px 16px;
+	font-size: 13px;
+	font-weight: 600;
+	color: #334155;
+	border-bottom: 1px solid #e2e8f0;
+	background: #ffffff;
+	text-align: left;
+}
+
+.rhw-slots-admin-table tbody td {
+	padding: 10px 16px;
+	font-size: 13px;
+	color: #334155;
+	border-bottom: 1px solid #f1f5f9;
+	vertical-align: middle;
+}
+
+.rhw-slots-admin-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.rhw-block-day-th {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+.rhw-block-day-label {
+	font-size: 12px;
+	line-height: 1.25;
+	text-decoration: underline;
+	text-align: right;
+	color: #334155;
+}
+
+.rhw-status-pill {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 4px;
+	font-size: 11px;
+	font-weight: 700;
+	color: #ffffff;
+}
+
+.rhw-status-pill.is-open { background: #4D8B16; }
+.rhw-status-pill.is-closed { background: #C81E1E; }
+.rhw-status-pill.is-booked { background: #7B112D; }
+.rhw-status-pill.is-gcal { background: #1D4ED8; }
+
+/* Toggle Switch (Red when Blocked/Closed, Grey when Open) */
+.rhw-switch {
+	position: relative;
+	display: inline-block;
+	width: 40px;
+	height: 22px;
+	flex-shrink: 0;
+}
+
+.rhw-switch input {
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+
+.rhw-switch-slider {
+	position: absolute;
+	cursor: pointer;
+	top: 0; left: 0; right: 0; bottom: 0;
+	background-color: #94a3b8;
+	transition: 0.2s;
+	border-radius: 22px;
+}
+
+.rhw-switch-slider:before {
+	position: absolute;
+	content: "";
+	height: 16px;
+	width: 16px;
+	left: 3px;
+	bottom: 3px;
+	background-color: #ffffff;
+	transition: 0.2s;
+	border-radius: 50%;
+}
+
+.rhw-switch input:checked + .rhw-switch-slider {
+	background-color: #C81E1E;
+}
+
+.rhw-switch input:checked + .rhw-switch-slider:before {
+	transform: translateX(18px);
+}
+
+.rhw-switch input:disabled + .rhw-switch-slider {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* Compact Month Calendar Card matching reference screenshot */
+.rhw-compact-cal-card {
+	background: #ffffff;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+	padding: 20px;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.rhw-compact-cal-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 	margin-bottom: 16px;
 }
 
-.rhw-admin-cal-month-title {
-	font-size: 18px;
+.rhw-compact-cal-title {
+	font-size: 16px;
 	font-weight: 700;
-	color: #7B112D;
+	color: #1e293b;
 	margin: 0;
 }
 
-.rhw-admin-cal-weekdays {
+.rhw-compact-cal-weekdays {
 	display: grid;
 	grid-template-columns: repeat(7, 1fr);
-	gap: 6px;
+	gap: 4px;
 	margin-bottom: 6px;
 }
 
-.rhw-admin-cal-weekdays div {
+.rhw-compact-cal-weekdays div {
 	text-align: center;
-	font-size: 11px;
-	font-weight: 700;
-	text-transform: uppercase;
-	color: #64748b;
-	padding: 6px 0;
+	font-size: 12px;
+	font-weight: 500;
+	color: #475569;
+	padding: 4px 0;
 }
 
-.rhw-admin-cal-grid {
+.rhw-compact-cal-grid {
 	display: grid;
 	grid-template-columns: repeat(7, 1fr);
 	gap: 6px;
 }
 
-.rhw-admin-day-square {
-	min-height: 82px;
-	border: 1px solid #e2e8f0;
-	border-radius: 6px;
-	padding: 6px;
+.rhw-compact-day-btn {
+	position: relative;
+	height: 38px;
+	border: 1px solid transparent;
+	border-radius: 8px;
 	background: #ffffff;
+	font-size: 13px;
+	font-weight: 500;
+	color: #1e293b;
 	cursor: pointer;
-	transition: all 0.15s ease;
 	display: flex;
-	flex-direction: column;
-	justify-content: space-between;
-	box-sizing: border-box;
-	text-align: left;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	transition: background 0.15s ease;
 }
 
-.rhw-admin-day-square:hover {
-	border-color: #C5A059;
-	background: #fdfbf7;
+.rhw-compact-day-btn:hover:not(.is-empty) {
+	background: #f1f5f9;
 }
 
-.rhw-admin-day-square.is-empty {
-	background: #f8fafc;
-	border-color: transparent;
+.rhw-compact-day-btn.is-empty {
+	background: transparent;
 	cursor: default;
 }
 
-.rhw-admin-day-square.is-closed {
-	background: #f1f5f9;
-	color: #94a3b8;
-}
-
-.rhw-admin-day-square.is-blocked {
-	background: #fef2f2;
-	border-color: #fecaca;
-}
-
-.rhw-admin-day-square.is-selected {
-	border: 2px solid #7B112D !important;
-	background: #fffafa;
-	box-shadow: 0 2px 8px rgba(123, 17, 45, 0.15);
-}
-
-.rhw-admin-day-square.is-today .rhw-day-num {
-	background: #C5A059;
-	color: #ffffff;
-	border-radius: 50%;
-	width: 22px;
-	height: 22px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-}
-
-.rhw-day-top {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	font-size: 13px;
+.rhw-compact-day-btn.is-selected {
+	background: #1E54B7 !important;
+	color: #ffffff !important;
 	font-weight: 700;
-	color: #1e293b;
 }
 
-.rhw-day-meta {
+.rhw-compact-day-btn.is-today:not(.is-selected) {
+	border: 1px solid #94a3b8;
+	font-weight: 700;
+}
+
+/* Corner status triangles in top-right corner of date cell */
+.rhw-tri-badge {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 0;
+	height: 0;
+	border-style: solid;
+	border-width: 0 9px 9px 0;
+	pointer-events: none;
+}
+
+.rhw-tri-open { border-color: transparent #6EE787 transparent transparent; }
+.rhw-tri-partial { border-color: transparent #FCD34D transparent transparent; }
+.rhw-tri-closed { border-color: transparent #FCA5A5 transparent transparent; }
+
+.rhw-compact-cal-legend {
+	margin-top: 20px;
+	padding-top: 14px;
+	border-top: 1px solid #f1f5f9;
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
-	margin-top: 4px;
+	gap: 10px;
+	font-size: 13px;
+	color: #475569;
 }
 
-.rhw-day-pill {
-	font-size: 10px;
-	font-weight: 600;
-	padding: 2px 5px;
-	border-radius: 3px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.rhw-day-pill-avail { background: #ecfdf5; color: #065f46; }
-.rhw-day-pill-booked { background: #7B112D; color: #ffffff; }
-.rhw-day-pill-blocked { background: #fee2e2; color: #991b1b; }
-.rhw-day-pill-closed { background: #e2e8f0; color: #64748b; }
-
-.rhw-slot-manage-list {
+.rhw-legend-row {
 	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-top: 14px;
-}
-
-.rhw-slot-manage-row {
-	display: flex;
-	justify-content: space-between;
 	align-items: center;
 	gap: 10px;
-	padding: 10px 12px;
-	border: 1px solid #e2e8f0;
-	border-radius: 6px;
-	background: #ffffff;
 }
 
-.rhw-slot-manage-row.status-booked {
-	border-left: 4px solid #7B112D;
-	background: #fff9fa;
+.rhw-legend-swatch-selected {
+	width: 14px;
+	height: 14px;
+	border-radius: 4px;
+	background: #1E54B7;
+	display: inline-block;
 }
 
-.rhw-slot-manage-row.status-blocked_admin {
-	border-left: 4px solid #dc2626;
-	background: #fef2f2;
-}
-
-.rhw-slot-manage-row.status-google_busy {
-	border-left: 4px solid #2563eb;
-	background: #eff6ff;
+.rhw-legend-tri {
+	width: 0;
+	height: 0;
+	border-style: solid;
+	border-width: 0 11px 11px 0;
+	display: inline-block;
 }
 
 .rhw-schedule-table {
