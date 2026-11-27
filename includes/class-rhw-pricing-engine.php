@@ -78,6 +78,13 @@ class RHW_Pricing_Engine {
 		}
 		$is_venue_only = ( 'venue_only' === $service_type || stripos( $service_type, 'Venue Only' ) !== false );
 
+		$questions_by_id = array();
+		foreach ( $questions as $q ) {
+			if ( ! empty( $q['id'] ) ) {
+				$questions_by_id[ $q['id'] ] = $q;
+			}
+		}
+
 		$line_items  = array();
 		$subtotal    = 0.0;
 		$fb_subtotal = 0.0;
@@ -89,8 +96,8 @@ class RHW_Pricing_Engine {
 				continue;
 			}
 
-			// Check conditional visibility
-			if ( ! self::is_question_visible( $q, $answers ) ) {
+			// Check conditional visibility (including chained parents)
+			if ( ! self::is_question_visible( $q, $answers, $questions_by_id ) ) {
 				continue;
 			}
 
@@ -250,16 +257,16 @@ class RHW_Pricing_Engine {
 				break;
 
 			case 'per_guest':
-				// Check if this is an attraction tour where custom participant count is specified!
+				// Check if this is an attraction tour where custom participant count is specified (up to Section 1 guest count)!
 				$multiplier = $guest_count;
 				if ( isset( $question['id'] ) && 'attraction_selection' === $question['id'] ) {
 					if ( isset( $answers['attraction_guests'] ) && is_numeric( $answers['attraction_guests'] ) && intval( $answers['attraction_guests'] ) > 0 ) {
-						$multiplier = intval( $answers['attraction_guests'] );
+						$multiplier = min( intval( $answers['attraction_guests'] ), $guest_count );
 					}
 				}
 				$qty   = $multiplier;
 				$total = $amount * $multiplier;
-				$note  = sprintf( '%d guests × $%s', $multiplier, number_format( $amount, 2 ) );
+				$note  = sprintf( '%d persons × $%s', $multiplier, number_format( $amount, 2 ) );
 				break;
 
 			case 'table_ratio_10':
@@ -457,11 +464,19 @@ class RHW_Pricing_Engine {
 	}
 
 	/**
-	 * Check if a question is visible based on conditional logic.
+	 * Check if a question is visible based on conditional logic (including parent chain).
 	 */
-	public static function is_question_visible( $question, $answers ) {
+	public static function is_question_visible( $question, $answers, $questions_by_id = array(), $visited = array() ) {
 		if ( empty( $question['conditional'] ) || empty( $question['conditional']['enabled'] ) ) {
 			return true;
+		}
+
+		$qid = isset( $question['id'] ) ? $question['id'] : '';
+		if ( ! empty( $qid ) ) {
+			if ( isset( $visited[ $qid ] ) ) {
+				return true; // Prevent cycle infinite loop
+			}
+			$visited[ $qid ] = true;
 		}
 
 		$condition = $question['conditional'];
@@ -469,7 +484,18 @@ class RHW_Pricing_Engine {
 		$operator  = isset( $condition['operator'] ) ? $condition['operator'] : 'equals';
 		$expected  = isset( $condition['value'] ) ? $condition['value'] : '';
 
-		if ( empty( $target_id ) || ! isset( $answers[ $target_id ] ) ) {
+		if ( empty( $target_id ) ) {
+			return false;
+		}
+
+		// Ensure parent question itself is visible
+		if ( ! empty( $questions_by_id[ $target_id ] ) ) {
+			if ( ! self::is_question_visible( $questions_by_id[ $target_id ], $answers, $questions_by_id, $visited ) ) {
+				return false;
+			}
+		}
+
+		if ( ! isset( $answers[ $target_id ] ) ) {
 			return false;
 		}
 
@@ -489,7 +515,16 @@ class RHW_Pricing_Engine {
 				return stripos( (string) $actual, (string) $expected ) !== false;
 
 			case 'not_empty':
-				return ! empty( $actual );
+				if ( is_array( $actual ) ) {
+					$filtered = array_filter(
+						$actual,
+						function( $item ) {
+							return '' !== trim( (string) $item );
+						}
+					);
+					return ! empty( $filtered );
+				}
+				return '' !== trim( (string) $actual );
 
 			case 'greater_than':
 				return floatval( $actual ) > floatval( $expected );

@@ -108,6 +108,7 @@
 
 		// Initial setup
 		initNumberSteppers();
+		initAttractionGuestSync();
 		initFileUploads();
 		initOtherTextInputs();
 		initDateTimePicker();
@@ -443,7 +444,7 @@
 					fieldVal = $group.find('input[type="radio"]:checked').val() || '';
 				} else if (q.type === 'checkboxes' || q.type === 'checkbox') {
 					fieldVal = $group.find('input[type="checkbox"]:checked').length > 0 ? 'checked' : '';
-				} else if (q.type === 'select') {
+				} else if (q.type === 'select' || q.type === 'country' || q.id === 'lead_country') {
 					fieldVal = $group.find('select').val() || '';
 				} else if (q.type === 'datetime' || (q.type === 'date' && $group.find('.rhw-datetime-picker-wrap').length)) {
 					const dVal = $group.find('.rhw-date-input').val();
@@ -492,6 +493,7 @@
 
 			$wrapper.find('.rhw-form-group').removeClass('has-error');
 			$wrapper.find('.rhw-error-message').hide();
+			$wrapper.find('.rhw-cal-error-msg').hide();
 
 			const answers = collectAnswers();
 			const serviceType = answers.service_type || '';
@@ -513,7 +515,7 @@
 						fieldVal = $group.find('input[type="radio"]:checked').val() || '';
 					} else if (q.type === 'checkboxes' || q.type === 'checkbox') {
 						fieldVal = $group.find('input[type="checkbox"]:checked').length > 0 ? 'checked' : '';
-					} else if (q.type === 'select') {
+					} else if (q.type === 'select' || q.type === 'country' || q.id === 'lead_country') {
 						fieldVal = $group.find('select').val() || '';
 					} else if (q.type === 'datetime' || (q.type === 'date' && $group.find('.rhw-datetime-picker-wrap').length)) {
 						const dVal = $group.find('.rhw-date-input').val();
@@ -542,6 +544,21 @@
 					}
 				});
 			});
+
+			// Validate consultation booking slot if marked required in calendar settings
+			const $calCard = $wrapper.find('.rhw-consultation-booking-card');
+			if (isValid && $calCard.length && String($calCard.data('cal-required')) === '1') {
+				const cDate = $wrapper.find('#rhw_consultation_date').val();
+				const cTime = $wrapper.find('#rhw_consultation_time').val();
+				if (!cDate || !cTime) {
+					isValid = false;
+					$calCard.find('.rhw-cal-error-msg').text('Please select a consultation date and available time slot before submitting.').fadeIn(200);
+					$('html, body').animate({
+						scrollTop: $calCard.offset().top - 170
+					}, 350);
+					return false;
+				}
+			}
 
 			if (!isValid && firstErrorGroup && errorStep !== -1) {
 				goToStep(errorStep);
@@ -584,68 +601,134 @@
 		}
 
 		/**
-		 * Dynamic Conditional Logic Router
+		 * Sync Section 5 Attraction Participant Count with Section 1 Guest Count (default <= Section 1 guest count)
+		 */
+		function getSection1GuestCount(answers) {
+			const gcQuestion = questions.find(q => q.is_guest_count) || questions.find(q => q.id === 'guest_count');
+			const qid = gcQuestion ? gcQuestion.id : 'guest_count';
+			const raw = answers ? answers[qid] : $wrapper.find(`#rhw_field_${qid}`).val();
+			return Math.max(1, parseInt(raw, 10) || 75);
+		}
+
+		function syncAttractionGuestLimits(guestCount) {
+			const $attrInput = $wrapper.find('#rhw_field_attraction_guests');
+			if (!$attrInput.length) return;
+
+			$attrInput.attr('max', guestCount);
+			const isFocused = (document.activeElement === $attrInput[0]);
+			const userEdited = $attrInput.data('user-edited') === true;
+			const currentVal = parseInt($attrInput.val(), 10);
+
+			if (!userEdited) {
+				if (!isFocused) {
+					$attrInput.val(guestCount);
+				}
+			} else if (!isFocused && (isNaN(currentVal) || currentVal < 1)) {
+				$attrInput.val(guestCount);
+			} else if (!isFocused && currentVal > guestCount) {
+				$attrInput.val(guestCount);
+			}
+		}
+
+		function initAttractionGuestSync() {
+			const $attrInput = $wrapper.find('#rhw_field_attraction_guests');
+			if (!$attrInput.length) return;
+
+			// Track manual changes by the user (typing or +/- steppers)
+			$attrInput.on('input', function() {
+				$(this).data('user-edited', true);
+			});
+
+			$attrInput.on('change blur', function() {
+				const maxAllowed = getSection1GuestCount(collectAnswers());
+				let val = parseInt($(this).val(), 10);
+				if (isNaN(val) || val < 1) {
+					val = 1;
+				} else if (val > maxAllowed) {
+					val = maxAllowed;
+				}
+				if (String(val) !== String($(this).val())) {
+					$(this).val(val).trigger('input');
+				}
+			});
+
+			syncAttractionGuestLimits(getSection1GuestCount(collectAnswers()));
+		}
+
+		/**
+		 * Dynamic Conditional Logic Router (supports chained conditionals & array values)
 		 */
 		function evaluateConditionalLogic() {
 			const answers = collectAnswers();
 			const serviceType = answers.service_type || '';
 			const isVenueOnly = (serviceType === 'venue_only' || (typeof serviceType === 'string' && serviceType.indexOf('Venue Only') !== -1));
 
-			$wrapper.find('.rhw-q-field').each(function() {
-				const $field = $(this);
-				const isFullServiceOnly = $field.data('full-service-only');
+			// Run up to 4 passes so nested/chained conditions (e.g., include_attractions -> attraction_selection -> attraction_guests) resolve cleanly
+			for (let pass = 0; pass < 4; pass++) {
+				let changed = false;
 
-				if (isVenueOnly && isFullServiceOnly) {
-					$field.addClass('rhw-hidden').hide();
-					return;
-				}
+				$wrapper.find('.rhw-q-field').each(function() {
+					const $field = $(this);
+					const wasHidden = $field.hasClass('rhw-hidden');
+					const isFullServiceOnly = $field.data('full-service-only');
 
-				const condRaw = $field.attr('data-conditional');
-				if (!condRaw) {
-					$field.removeClass('rhw-hidden').show();
-					return;
-				}
-
-				try {
-					const cond = JSON.parse(condRaw);
-					if (!cond.enabled) {
-						$field.removeClass('rhw-hidden').show();
-						return;
-					}
-
-					const parentVal = answers[cond.field];
-					let isMet = false;
-
-					switch (cond.operator) {
-						case 'equals':
-							isMet = String(parentVal) === String(cond.value);
-							break;
-						case 'not_equals':
-							isMet = String(parentVal) !== String(cond.value);
-							break;
-						case 'contains':
-							if (Array.isArray(parentVal)) {
-								isMet = parentVal.includes(cond.value);
-							} else {
-								isMet = parentVal && String(parentVal).indexOf(cond.value) !== -1;
-							}
-							break;
-						case 'not_empty':
-							isMet = parentVal && String(parentVal).trim() !== '';
-							break;
-						default:
-							isMet = true;
-					}
-
-					if (isMet) {
-						$field.removeClass('rhw-hidden').show();
+					let shouldShow = true;
+					if (isVenueOnly && isFullServiceOnly) {
+						shouldShow = false;
 					} else {
-						$field.addClass('rhw-hidden').hide();
+						const condRaw = $field.attr('data-conditional');
+						if (condRaw) {
+							try {
+								const cond = JSON.parse(condRaw);
+								if (cond.enabled && cond.field) {
+									const $parentField = $wrapper.find(`.rhw-q-field[data-qid="${cond.field}"]`);
+									if ($parentField.length && $parentField.hasClass('rhw-hidden')) {
+										shouldShow = false;
+									} else {
+										const parentVal = answers[cond.field];
+										switch (cond.operator) {
+											case 'equals':
+												shouldShow = String(parentVal) === String(cond.value);
+												break;
+											case 'not_equals':
+												shouldShow = String(parentVal) !== String(cond.value);
+												break;
+											case 'contains':
+												if (Array.isArray(parentVal)) {
+													shouldShow = parentVal.includes(cond.value);
+												} else {
+													shouldShow = Boolean(parentVal && String(parentVal).indexOf(cond.value) !== -1);
+												}
+												break;
+											case 'not_empty':
+												if (Array.isArray(parentVal)) {
+													shouldShow = parentVal.length > 0;
+												} else {
+													shouldShow = Boolean(parentVal !== undefined && parentVal !== null && String(parentVal).trim() !== '');
+												}
+												break;
+											default:
+												shouldShow = true;
+										}
+									}
+								}
+							} catch (e) {
+								shouldShow = true;
+							}
+						}
 					}
-				} catch (e) {
-					$field.removeClass('rhw-hidden').show();
-				}
-			});
+
+					if (shouldShow && wasHidden) {
+						$field.removeClass('rhw-hidden').show();
+						changed = true;
+					} else if (!shouldShow && !wasHidden) {
+						$field.addClass('rhw-hidden').hide();
+						changed = true;
+					}
+				});
+
+				if (!changed) break;
+			}
 		}
 
 		/**
@@ -685,8 +768,14 @@
 		 */
 		function runLiveCalculation() {
 			const answers = collectAnswers();
-			const guestCount = parseInt(answers.guest_count, 10) || 75;
+			const guestCount = getSection1GuestCount(answers);
 			$wrapper.find('#rhw-live-guest-display').text(guestCount);
+
+			syncAttractionGuestLimits(guestCount);
+			const syncedAttrVal = parseInt($wrapper.find('#rhw_field_attraction_guests').val(), 10);
+			if (!isNaN(syncedAttrVal) && syncedAttrVal > 0) {
+				answers.attraction_guests = String(Math.min(syncedAttrVal, guestCount));
+			}
 
 			const isWeekend = isDateWeekend(answers.event_date);
 			const serviceType = answers.service_type || 'full_service';
@@ -817,12 +906,12 @@
 					break;
 
 				case 'per_guest':
-					// Attraction Participant Count (Requirement 10)
+					// Attraction Participant Count (up to Section 1 guest count)
 					let count = guestCount;
 					if (question.id === 'attraction_selection') {
 						const tourGuests = parseInt(answers.attraction_guests, 10);
 						if (tourGuests > 0) {
-							count = tourGuests;
+							count = Math.min(tourGuests, guestCount);
 						}
 					}
 					qty = count;
@@ -1110,6 +1199,9 @@
 					if (response.success) {
 						showSuccessState(response.data);
 					} else {
+						if (response.data && response.data.slot_taken) {
+							$wrapper.trigger('rhw:refresh_calendar');
+						}
 						if (response.data && response.data.errors) {
 							const firstErrQid = Object.keys(response.data.errors)[0];
 							const $errField = $wrapper.find(`.rhw-form-group[data-qid="${firstErrQid}"]`);
@@ -1155,12 +1247,19 @@
 			$successView.find('.rhw-lead-guests-text').text(data.guest_count + ' guests');
 			$successView.find('.rhw-lead-total-text').text(data.grand_total);
 
-			// Consultation booking and Google Calendar Link (Item 9)
+			// Consultation booking, Google Meet & Google Calendar Link
 			if (data.consultation_date && data.consultation_time) {
 				$successView.find('.rhw-lead-consultation-text').text(`${data.consultation_date} at ${data.consultation_time}`);
 				$successView.find('.rhw-success-consultation-row').show();
 			} else {
 				$successView.find('.rhw-success-consultation-row').hide();
+			}
+
+			if (data.google_meet_link) {
+				$successView.find('.rhw-lead-meet-link').attr('href', data.google_meet_link);
+				$successView.find('.rhw-success-meet-row').show();
+			} else {
+				$successView.find('.rhw-success-meet-row').hide();
 			}
 
 			if (data.gcal_link) {
@@ -1178,20 +1277,127 @@
 		}
 
 		/**
-		 * Consultation Slot Scheduler with Live Team Calendar Sync (Item 9)
+		 * Consultation Month Grid Calendar & Time Slot Scheduler (Synced with Google Calendar)
 		 */
 		function initConsultationScheduler() {
-			const $dateInput = $wrapper.find('#rhw_consultation_date');
-			const $timeInput = $wrapper.find('#rhw_consultation_time');
-			const $slotsContainer = $wrapper.find('#rhw-slots-container');
-			const $preview = $wrapper.find('.rhw-selected-slot-preview');
-			const $previewText = $wrapper.find('.rhw-selected-slot-text');
+			const $card = $wrapper.find('.rhw-consultation-booking-card');
+			if (!$card.length) return;
 
-			if (!$dateInput.length || !$slotsContainer.length) return;
+			const $grid = $card.find('#rhw-public-cal-grid');
+			const $monthTitle = $card.find('#rhw-pub-cal-month-title');
+			const $dateHeading = $card.find('#rhw-selected-date-heading');
+			const $slotsContainer = $card.find('#rhw-slots-container');
+			const $dateInput = $card.find('#rhw_consultation_date');
+			const $timeInput = $card.find('#rhw_consultation_time');
+			const $preview = $card.find('.rhw-selected-slot-preview');
+			const $previewText = $card.find('.rhw-selected-slot-text');
+
+			let viewYear = parseInt($card.data('init-year'), 10) || new Date().getFullYear();
+			let viewMonth = parseInt($card.data('init-month'), 10) || (new Date().getMonth() + 1);
+			let activeDayStr = '';
+			let activeDayFormatted = '';
+			let triedNextMonthFallback = false;
+
+			function loadMonthCalendar(year, month, autoFocusDay) {
+				viewYear = year;
+				viewMonth = month;
+				$grid.css('opacity', 0.6);
+
+				$.ajax({
+					url: config.ajax_url,
+					type: 'GET',
+					data: {
+						action: 'rhw_get_month_availability',
+						nonce: config.nonce,
+						year: year,
+						month: month
+					},
+					dataType: 'json',
+					success: function(res) {
+						$grid.css('opacity', 1);
+						if (!res || !res.success || !res.data) {
+							$grid.html('<div class="rhw-cal-grid-loading">Unable to load calendar.</div>');
+							return;
+						}
+
+						const data = res.data;
+						$monthTitle.text(data.month_label);
+						$grid.empty();
+
+						// Empty cells before month starts
+						for (let i = 0; i < data.first_weekday; i++) {
+							$grid.append('<div class="rhw-pub-day-square is-empty" aria-hidden="true"></div>');
+						}
+
+						let firstAvailDate = '';
+						for (let d = 1; d <= data.days_in_month; d++) {
+							const mm = String(data.month).padStart(2, '0');
+							const dd = String(d).padStart(2, '0');
+							const dateStr = `${data.year}-${mm}-${dd}`;
+							const info = data.days[dateStr] || { status: 'closed', available_count: 0 };
+
+							const isAvail = info.status === 'available';
+							if (isAvail && !firstAvailDate) {
+								firstAvailDate = dateStr;
+							}
+
+							const classes = ['rhw-pub-day-square'];
+							if (isAvail) {
+								classes.push('is-available');
+							} else {
+								classes.push('is-disabled');
+							}
+							if (info.is_today) {
+								classes.push('is-today');
+							}
+							if (dateStr === activeDayStr) {
+								classes.push('is-selected');
+							}
+
+							const dotHtml = isAvail ? '<span class="rhw-day-avail-dot"></span>' : '';
+							const titleAttr = isAvail ? `${info.available_count} time slots open` : 'Unavailable';
+
+							const $sq = $(`
+								<button type="button" class="${classes.join(' ')}" data-date="${dateStr}" ${isAvail ? '' : 'disabled'} title="${titleAttr}">
+									<span>${d}</span>
+									${dotHtml}
+								</button>
+							`);
+							$grid.append($sq);
+						}
+
+						if (autoFocusDay) {
+							if (firstAvailDate) {
+								focusDateSquare(firstAvailDate);
+							} else if (!triedNextMonthFallback) {
+								// Automatically advance 1 month if current month has no open dates left
+								triedNextMonthFallback = true;
+								let ny = viewYear;
+								let nm = viewMonth + 1;
+								if (nm > 12) { nm = 1; ny++; }
+								loadMonthCalendar(ny, nm, true);
+							} else {
+								$dateHeading.text('No available dates this month');
+								$slotsContainer.html('<div class="rhw-slots-empty">Please check another month using the arrows.</div>');
+							}
+						}
+					},
+					error: function() {
+						$grid.css('opacity', 1).html('<div class="rhw-cal-grid-loading">Unable to connect to calendar service.</div>');
+					}
+				});
+			}
+
+			function focusDateSquare(dateStr) {
+				activeDayStr = dateStr;
+				$grid.find('.rhw-pub-day-square').removeClass('is-selected');
+				$grid.find(`.rhw-pub-day-square[data-date="${dateStr}"]`).addClass('is-selected');
+				loadSlotsForDate(dateStr);
+			}
 
 			function loadSlotsForDate(selectedDate) {
 				if (!selectedDate) return;
-				$slotsContainer.html('<div class="rhw-slots-loading" style="padding: 6px 0; font-size: 12px; color: #666;"><span class="dashicons dashicons-update rhw-spin"></span> Checking available slots...</div>');
+				$slotsContainer.html('<div class="rhw-slots-loading"><span class="dashicons dashicons-update rhw-spin"></span> Checking available slots...</div>');
 
 				$.ajax({
 					url: config.ajax_url,
@@ -1203,70 +1409,100 @@
 					},
 					dataType: 'json',
 					success: function(res) {
-						if (res && res.success && res.data && res.data.slots && res.data.slots.length) {
-							let html = '';
-							let firstAvailable = null;
-							res.data.slots.forEach(s => {
-								if (s.available && !firstAvailable) {
-									firstAvailable = s.time;
-								}
-								const disClass = s.available ? '' : 'disabled';
-								const titleAttr = s.available ? '' : 'title="Slot Booked"';
-								html += `<button type="button" class="rhw-slot-pill ${disClass}" data-time="${s.time}" ${titleAttr}>${s.time}</button>`;
-							});
-							$slotsContainer.html(html);
+						if (res && res.success && res.data) {
+							activeDayFormatted = res.data.formatted_date || selectedDate;
+							$dateHeading.text(`Available Times: ${activeDayFormatted}`);
 
-							const currentTime = $timeInput.val();
-							const $match = $slotsContainer.find(`.rhw-slot-pill[data-time="${currentTime}"]:not(.disabled)`);
-							if ($match.length) {
-								$match.addClass('active');
-								updatePreview(selectedDate, currentTime);
-							} else if (firstAvailable) {
-								$slotsContainer.find(`.rhw-slot-pill[data-time="${firstAvailable}"]`).addClass('active');
-								$timeInput.val(firstAvailable);
-								updatePreview(selectedDate, firstAvailable);
+							if (res.data.slots && res.data.slots.length) {
+								let html = '';
+								const chosenDate = $dateInput.val();
+								const chosenTime = $timeInput.val();
+
+								res.data.slots.forEach(s => {
+									const disClass = s.available ? '' : 'disabled';
+									const activeClass = (s.available && chosenDate === selectedDate && chosenTime === s.time) ? 'active' : '';
+									const titleAttr = s.available ? `title="${escapeHtml(s.range_label || s.time)}"` : 'title="Unavailable"';
+									html += `<button type="button" class="rhw-slot-pill ${disClass} ${activeClass}" data-time="${escapeHtml(s.time)}" ${s.available ? '' : 'disabled'} ${titleAttr}>${escapeHtml(s.label || s.time)}</button>`;
+								});
+								$slotsContainer.html(html);
 							} else {
-								$timeInput.val('');
-								$preview.hide();
+								const msg = res.data.message || 'No consultation slots available on this date.';
+								$slotsContainer.html(`<div class="rhw-slots-empty">${escapeHtml(msg)}</div>`);
 							}
 						} else {
-							const msg = (res && res.data && res.data.message) ? res.data.message : 'No consultation slots available on this date.';
-							$slotsContainer.html(`<div style="font-size:12px; color:#c02626; padding:6px 0;">${msg}</div>`);
-							$timeInput.val('');
-							$preview.hide();
+							const msg = (res && res.data && res.data.message) ? res.data.message : 'Unable to load time slots.';
+							$slotsContainer.html(`<div class="rhw-slots-empty">${escapeHtml(msg)}</div>`);
 						}
 					},
 					error: function() {
-						$slotsContainer.html('<div style="font-size:12px; color:#666;">Unable to check availability. Please choose another date.</div>');
+						$slotsContainer.html('<div class="rhw-slots-empty">Unable to check availability. Please choose another date.</div>');
 					}
 				});
 			}
 
-			function updatePreview(dateStr, timeStr) {
-				if (dateStr && timeStr) {
-					$previewText.text(`${dateStr} at ${timeStr}`);
+			function updateSelectionPreview() {
+				const cDate = $dateInput.val();
+				const cTime = $timeInput.val();
+				if (cDate && cTime) {
+					const dispDate = (cDate === activeDayStr && activeDayFormatted) ? activeDayFormatted : cDate;
+					$previewText.text(`${dispDate} at ${cTime}`);
 					$preview.slideDown(150);
+					$card.find('.rhw-cal-error-msg').hide();
 				} else {
 					$preview.hide();
 				}
 			}
 
-			$dateInput.on('change', function() {
-				loadSlotsForDate($(this).val());
+			$card.find('.rhw-pub-cal-prev').on('click', function() {
+				let m = viewMonth - 1;
+				let y = viewYear;
+				if (m < 1) { m = 12; y--; }
+				loadMonthCalendar(y, m, false);
+			});
+
+			$card.find('.rhw-pub-cal-next').on('click', function() {
+				let m = viewMonth + 1;
+				let y = viewYear;
+				if (m > 12) { m = 1; y++; }
+				loadMonthCalendar(y, m, false);
+			});
+
+			$grid.on('click', '.rhw-pub-day-square.is-available', function() {
+				const dateStr = $(this).data('date');
+				if (!dateStr) return;
+
+				// Clicking a new date square clears previous time slot so the user selects a valid time on the new date
+				if ($dateInput.val() !== dateStr) {
+					$dateInput.val('');
+					$timeInput.val('');
+					updateSelectionPreview();
+				}
+				focusDateSquare(dateStr);
 			});
 
 			$slotsContainer.on('click', '.rhw-slot-pill:not(.disabled)', function(e) {
 				e.preventDefault();
+				const selectedTime = $(this).data('time');
+				if (!activeDayStr || !selectedTime) return;
+
 				$slotsContainer.find('.rhw-slot-pill').removeClass('active');
 				$(this).addClass('active');
-				const selectedTime = $(this).data('time');
+				$dateInput.val(activeDayStr);
 				$timeInput.val(selectedTime);
-				updatePreview($dateInput.val(), selectedTime);
+				updateSelectionPreview();
 			});
 
-			if ($dateInput.val()) {
-				loadSlotsForDate($dateInput.val());
-			}
+			$wrapper.on('rhw:refresh_calendar', function() {
+				loadMonthCalendar(viewYear, viewMonth, false);
+				if (activeDayStr) {
+					$timeInput.val('');
+					updateSelectionPreview();
+					loadSlotsForDate(activeDayStr);
+				}
+			});
+
+			// Load initial month grid cleanly
+			loadMonthCalendar(viewYear, viewMonth, true);
 		}
 
 		function escapeHtml(str) {

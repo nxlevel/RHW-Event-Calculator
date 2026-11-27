@@ -26,10 +26,28 @@ class RHW_Submission_Handler {
 
 		add_action( 'wp_ajax_rhw_get_available_slots', array( $this, 'handle_get_available_slots' ) );
 		add_action( 'wp_ajax_nopriv_rhw_get_available_slots', array( $this, 'handle_get_available_slots' ) );
+
+		add_action( 'wp_ajax_rhw_get_month_availability', array( $this, 'handle_get_month_availability' ) );
+		add_action( 'wp_ajax_nopriv_rhw_get_month_availability', array( $this, 'handle_get_month_availability' ) );
 	}
 
 	/**
-	 * Retrieve live available consultation time slots synced with team calendar (Item 9)
+	 * Retrieve Month Grid Calendar availability (synced with local bookings, admin schedule, and Google Calendar FreeBusy).
+	 */
+	public function handle_get_month_availability() {
+		check_ajax_referer( 'rhw_calculator_nonce', 'nonce' );
+
+		$tz     = RHW_Calendar_Manager::get_timezone();
+		$now_dt = new DateTimeImmutable( 'now', $tz );
+		$year   = isset( $_GET['year'] ) ? intval( $_GET['year'] ) : (int) $now_dt->format( 'Y' );
+		$month  = isset( $_GET['month'] ) ? intval( $_GET['month'] ) : (int) $now_dt->format( 'n' );
+
+		$data = RHW_Calendar_Manager::get_month_availability( $year, $month, false );
+		wp_send_json_success( $data );
+	}
+
+	/**
+	 * Retrieve live available consultation time slots synced with team calendar & schedule config.
 	 */
 	public function handle_get_available_slots() {
 		check_ajax_referer( 'rhw_calculator_nonce', 'nonce' );
@@ -39,58 +57,8 @@ class RHW_Submission_Handler {
 			wp_send_json_error( array( 'message' => esc_html__( 'Please select a valid date.', 'rhw-calculator' ) ) );
 		}
 
-		// Prevent booking in the past
-		if ( strtotime( $date ) < strtotime( date( 'Y-m-d' ) ) ) {
-			wp_send_json_error( array( 'message' => esc_html__( 'Consultations cannot be scheduled on past dates.', 'rhw-calculator' ) ) );
-		}
-
-		// Closed on Sundays
-		$day_of_week = (int) date( 'w', strtotime( $date ) ); // 0 = Sunday
-		if ( 0 === $day_of_week ) {
-			wp_send_json_success( array(
-				'date'    => $date,
-				'slots'   => array(),
-				'message' => esc_html__( 'Sundays are reserved for weddings on the estate. Please select Monday through Saturday.', 'rhw-calculator' ),
-			) );
-		}
-
-		$all_slots = array(
-			'09:00 AM',
-			'10:00 AM',
-			'11:00 AM',
-			'01:00 PM',
-			'02:00 PM',
-			'03:00 PM',
-			'04:00 PM',
-		);
-
-		global $wpdb;
-		RHW_Activator::ensure_bookings_table_exists();
-		$bookings_table = $wpdb->prefix . 'rhw_bookings';
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$booked = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT booking_time FROM {$bookings_table} WHERE booking_date = %s AND status IN ('confirmed', 'blocked')",
-				$date
-			)
-		);
-
-		$is_all_day_blocked = in_array( 'all_day', (array) $booked, true );
-
-		$slots = array();
-		foreach ( $all_slots as $slot ) {
-			$available = ! $is_all_day_blocked && ! in_array( $slot, (array) $booked, true );
-			$slots[]   = array(
-				'time'      => $slot,
-				'available' => $available,
-			);
-		}
-
-		wp_send_json_success( array(
-			'date'  => $date,
-			'slots' => $slots,
-		) );
+		$data = RHW_Calendar_Manager::get_day_slots( $date, false );
+		wp_send_json_success( $data );
 	}
 
 	/**
@@ -207,6 +175,26 @@ class RHW_Submission_Handler {
 			wp_send_json_error( array( 'message' => esc_html__( 'A valid full name and email address are required.', 'rhw-calculator' ) ) );
 		}
 
+		// Validate Consultation Booking Slot BEFORE saving submission (prevents race double-booking)
+		$cal_settings      = RHW_Calendar_Manager::get_settings();
+		$consultation_date = isset( $_POST['consultation_date'] ) ? sanitize_text_field( wp_unslash( $_POST['consultation_date'] ) ) : '';
+		$consultation_time = isset( $_POST['consultation_time'] ) ? sanitize_text_field( wp_unslash( $_POST['consultation_time'] ) ) : '';
+
+		if ( ! empty( $cal_settings['enabled'] ) && ! empty( $cal_settings['required'] ) && ( empty( $consultation_date ) || empty( $consultation_time ) ) ) {
+			wp_send_json_error( array(
+				'message' => esc_html__( 'Please select a consultation date and time slot on the calendar before submitting.', 'rhw-calculator' ),
+			) );
+		}
+
+		if ( ! empty( $consultation_date ) && ! empty( $consultation_time ) ) {
+			if ( ! RHW_Calendar_Manager::is_slot_available( $consultation_date, $consultation_time ) ) {
+				wp_send_json_error( array(
+					'message'    => esc_html__( 'Sorry, that consultation time slot was just booked or is unavailable. Please select another open time.', 'rhw-calculator' ),
+					'slot_taken' => true,
+				) );
+			}
+		}
+
 		// 6. Anti-Duplicate Submission Lock (30-second window for same email & form)
 		$ip_address      = sanitize_text_field( wp_unslash( isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : '' ) );
 		$duplicate_hash  = 'rhw_sub_' . md5( $customer_email . '_' . $form_id . '_' . $ip_address );
@@ -258,48 +246,93 @@ class RHW_Submission_Handler {
 
 		$submission_id = $wpdb->insert_id;
 
-		// Consultation Slot Booking & Google Calendar Sync (Item 9)
-		$consultation_date = isset( $_POST['consultation_date'] ) ? sanitize_text_field( wp_unslash( $_POST['consultation_date'] ) ) : '';
-		$consultation_time = isset( $_POST['consultation_time'] ) ? sanitize_text_field( wp_unslash( $_POST['consultation_time'] ) ) : '';
-		$gcal_link         = '';
+		// Consultation Slot Booking & 2-Way Google Calendar Sync
+		$gcal_link        = '';
+		$google_meet_link = '';
+		$google_event_id  = '';
 
 		if ( ! empty( $consultation_date ) && ! empty( $consultation_time ) ) {
 			RHW_Activator::ensure_bookings_table_exists();
 			$bookings_table = $wpdb->prefix . 'rhw_bookings';
+			$tz             = RHW_Calendar_Manager::get_timezone( $cal_settings );
+			$duration_mins  = max( 15, intval( $cal_settings['interval_minutes'] ) );
+
+			try {
+				$start_dt = new DateTimeImmutable( $consultation_date . ' ' . $consultation_time, $tz );
+				$end_dt   = $start_dt->modify( '+' . $duration_mins . ' minutes' );
+				$start_ts = $start_dt->getTimestamp();
+				$end_ts   = $end_dt->getTimestamp();
+
+				// Build universal fallback 1-click Google Calendar link
+				$gcal_details = sprintf(
+					"Wedding & Event Consultation with Rose Hall specialist.\nQuote ID: #%d\nEstimated Cost: %s\nPreferred Event Date: %s\nGuest Count: %d\nCustomer: %s (%s, %s)",
+					$submission_id,
+					$calc['formatted']['grand_total'],
+					$event_date_comb,
+					$calc['guest_count'],
+					$customer_name,
+					$customer_email,
+					$customer_phone
+				);
+				$gcal_link = RHW_Google_Calendar::build_manual_gcal_url(
+					'Rose Hall Wedding Consultation: ' . $customer_name,
+					$start_ts,
+					$end_ts,
+					$gcal_details
+				);
+
+				// Automatically create event in connected team Google Calendar if enabled
+				if ( RHW_Google_Calendar::is_connected() ) {
+					$gcal_result = RHW_Google_Calendar::create_event(
+						array(
+							'summary'        => 'Rose Hall Wedding Consultation: ' . $customer_name,
+							'description'    => $gcal_details . "\nView in WP Admin: " . admin_url( 'admin.php?page=rhw-calculator-submissions&action=view&id=' . $submission_id ),
+							'start_iso'      => $start_dt->format( DATE_RFC3339 ),
+							'end_iso'        => $end_dt->format( DATE_RFC3339 ),
+							'timezone'       => $tz->getName(),
+							'attendee_email' => $customer_email,
+							'attendee_name'  => $customer_name,
+						)
+					);
+
+					if ( ! is_wp_error( $gcal_result ) && ! empty( $gcal_result['event_id'] ) ) {
+						$google_event_id  = $gcal_result['event_id'];
+						$google_meet_link = ! empty( $gcal_result['meet_link'] ) ? $gcal_result['meet_link'] : '';
+						if ( ! empty( $gcal_result['html_link'] ) ) {
+							$gcal_link = $gcal_result['html_link'];
+						}
+					}
+				}
+			} catch ( Exception $e ) {
+				// Non-fatal fallback
+			}
 
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$wpdb->insert(
 				$bookings_table,
 				array(
-					'submission_id'  => $submission_id,
-					'customer_name'  => $customer_name,
-					'customer_email' => $customer_email,
-					'customer_phone' => $customer_phone,
-					'booking_date'   => $consultation_date,
-					'booking_time'   => $consultation_time,
-					'booking_type'   => 'consultation',
-					'notes'          => sprintf( 'Lead quote #%d: $%s (%s)', $submission_id, number_format( $calc['grand_total'], 2 ), $venue_selection ),
-					'status'         => 'confirmed',
-					'created_at'     => current_time( 'mysql' ),
+					'submission_id'    => $submission_id,
+					'customer_name'    => $customer_name,
+					'customer_email'   => $customer_email,
+					'customer_phone'   => $customer_phone,
+					'booking_date'     => $consultation_date,
+					'booking_time'     => $consultation_time,
+					'booking_type'     => 'consultation',
+					'notes'            => sprintf( 'Lead quote #%d: %s (%s)', $submission_id, $calc['formatted']['grand_total'], $venue_selection ),
+					'status'           => 'confirmed',
+					'google_event_id'  => $google_event_id,
+					'google_meet_link' => $google_meet_link,
+					'created_at'       => current_time( 'mysql' ),
 				),
-				array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+				array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 			);
+
+			RHW_Google_Calendar::clear_busy_cache();
 
 			$submission_data['consultation_date'] = $consultation_date;
 			$submission_data['consultation_time'] = $consultation_time;
-
-			// Generate Google Calendar Link
-			$start_timestamp = strtotime( $consultation_date . ' ' . $consultation_time );
-			if ( $start_timestamp ) {
-				$end_timestamp = $start_timestamp + ( 45 * 60 ); // 45-minute consultation
-				$start_iso     = gmdate( 'Ymd\THis\Z', $start_timestamp );
-				$end_iso       = gmdate( 'Ymd\THis\Z', $end_timestamp );
-				$gcal_title    = rawurlencode( 'Rose Hall Wedding Consultation: ' . $customer_name );
-				$gcal_details  = rawurlencode( sprintf( "Wedding & Event Consultation with Rose Hall specialist.\nQuote ID: #%d\nEstimated Investment: %s\nCustomer: %s (%s, %s)", $submission_id, $calc['formatted']['grand_total'], $customer_name, $customer_email, $customer_phone ) );
-				$gcal_loc      = rawurlencode( 'Rose Hall Weddings & Events (Phone / Google Meet), Montego Bay, Jamaica' );
-				$gcal_link     = "https://calendar.google.com/calendar/render?action=TEMPLATE&text={$gcal_title}&dates={$start_iso}/{$end_iso}&details={$gcal_details}&location={$gcal_loc}";
-				$submission_data['gcal_link'] = $gcal_link;
-			}
+			$submission_data['gcal_link']         = $gcal_link;
+			$submission_data['google_meet_link']  = $google_meet_link;
 		}
 
 		// 9. Send Notification Emails
@@ -315,6 +348,7 @@ class RHW_Submission_Handler {
 			'consultation_date' => $consultation_date,
 			'consultation_time' => $consultation_time,
 			'gcal_link'         => $gcal_link,
+			'google_meet_link'  => $google_meet_link,
 			'guest_count'       => $calc['guest_count'],
 			'grand_total'       => $calc['formatted']['grand_total'],
 			'message'           => esc_html__( 'Thank you! Your consultation request was sent! Our Destination Relationship Specialists will connect with you at your chosen appointment time.', 'rhw-calculator' ),
@@ -376,10 +410,17 @@ class RHW_Submission_Handler {
 	 * Validate required fields on server.
 	 */
 	private function validate_required_fields( $form, $answers ) {
-		$errors       = array();
-		$questions    = isset( $form['questions'] ) ? $form['questions'] : array();
-		$service_type = isset( $answers['service_type'] ) ? $answers['service_type'] : '';
+		$errors        = array();
+		$questions     = isset( $form['questions'] ) ? $form['questions'] : array();
+		$service_type  = isset( $answers['service_type'] ) ? $answers['service_type'] : '';
 		$is_venue_only = ( 'venue_only' === $service_type || false !== stripos( (string) $service_type, 'Venue Only' ) );
+
+		$questions_by_id = array();
+		foreach ( $questions as $q ) {
+			if ( ! empty( $q['id'] ) ) {
+				$questions_by_id[ $q['id'] ] = $q;
+			}
+		}
 
 		foreach ( $questions as $q ) {
 			if ( empty( $q['required'] ) ) {
@@ -391,7 +432,7 @@ class RHW_Submission_Handler {
 				continue;
 			}
 
-			if ( ! RHW_Pricing_Engine::is_question_visible( $q, $answers ) ) {
+			if ( ! RHW_Pricing_Engine::is_question_visible( $q, $answers, $questions_by_id ) ) {
 				continue;
 			}
 

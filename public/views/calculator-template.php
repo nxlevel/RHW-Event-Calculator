@@ -415,48 +415,84 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 							<?php endforeach; ?>
 						</div>
 
-						<?php if ( $s_idx === count( $sections ) - 1 ) : ?>
-							<!-- Google Calendar Synced Consultation Scheduler (Item 9) -->
-							<div class="rhw-consultation-booking-card" style="margin-top: 24px; padding: 20px; background: #FAF7F2; border: 1px solid #E5DCD1; border-radius: 8px;">
-								<div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px;">
-									<span class="dashicons dashicons-calendar-alt" style="font-size: 24px; width: 24px; height: 24px; color: var(--rhw-primary); margin-top: 2px;"></span>
+						<?php
+						$cal_settings = class_exists( 'RHW_Calendar_Manager' ) ? RHW_Calendar_Manager::get_settings() : array( 'enabled' => 1, 'required' => 0 );
+						if ( $s_idx === count( $sections ) - 1 && ! empty( $cal_settings['enabled'] ) ) :
+							$cal_tz        = RHW_Calendar_Manager::get_timezone( $cal_settings );
+							$cal_now       = new DateTimeImmutable( 'now', $cal_tz );
+							$cal_init_year = (int) $cal_now->format( 'Y' );
+							$cal_init_mon  = (int) $cal_now->format( 'n' );
+							$cal_required  = ! empty( $cal_settings['required'] );
+						?>
+							<!-- Google Calendar Synced Month Grid Consultation Scheduler -->
+							<div class="rhw-consultation-booking-card" data-init-year="<?php echo esc_attr( $cal_init_year ); ?>" data-init-month="<?php echo esc_attr( $cal_init_mon ); ?>" data-cal-required="<?php echo $cal_required ? '1' : '0'; ?>">
+								<div class="rhw-cal-card-header">
+									<span class="dashicons dashicons-calendar-alt"></span>
 									<div>
-										<h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--rhw-primary);"><?php esc_html_e( 'Schedule Your Wedding Consultation Call', 'rhw-calculator' ); ?></h4>
-										<p style="margin: 3px 0 0; font-size: 13px; color: #666; line-height: 1.4;"><?php esc_html_e( 'Select a date and available time slot to meet with a Rose Hall Wedding Specialist via Phone or Google Meet.', 'rhw-calculator' ); ?></p>
+										<h4>
+											<?php esc_html_e( 'Schedule Your Wedding Consultation Call', 'rhw-calculator' ); ?>
+											<?php if ( $cal_required ) : ?>
+												<span class="rhw-required-star" aria-hidden="true">*</span>
+											<?php endif; ?>
+										</h4>
+										<p><?php esc_html_e( 'Choose an available date square on the calendar below and pick a meeting time synced live with our team Google Calendar.', 'rhw-calculator' ); ?></p>
 									</div>
 								</div>
 
-								<div class="rhw-consultation-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
-									<div>
-										<label class="rhw-field-label" for="rhw_consultation_date">
-											<?php esc_html_e( 'Preferred Meeting Date', 'rhw-calculator' ); ?>
-										</label>
-										<input type="date"
-										       id="rhw_consultation_date"
-										       name="consultation_date"
-										       class="rhw-text-input rhw-consultation-date-input"
-										       min="<?php echo esc_attr( date( 'Y-m-d', strtotime( '+1 day' ) ) ); ?>"
-										       value="<?php echo esc_attr( date( 'Y-m-d', strtotime( '+2 days' ) ) ); ?>">
-										<small style="color: #777; font-size: 11px; display: block; margin-top: 4px;"><?php esc_html_e( 'Consultations available Monday &ndash; Saturday', 'rhw-calculator' ); ?></small>
+								<div class="rhw-pub-cal-layout">
+									<!-- Left: Month Calendar Grid with Date Squares -->
+									<div class="rhw-pub-cal-month-box">
+										<div class="rhw-pub-cal-nav">
+											<button type="button" class="rhw-pub-cal-nav-btn rhw-pub-cal-prev" aria-label="<?php esc_attr_e( 'Previous Month', 'rhw-calculator' ); ?>">&lsaquo;</button>
+											<strong class="rhw-pub-cal-month-title" id="rhw-pub-cal-month-title"><?php echo esc_html( $cal_now->format( 'F Y' ) ); ?></strong>
+											<button type="button" class="rhw-pub-cal-nav-btn rhw-pub-cal-next" aria-label="<?php esc_attr_e( 'Next Month', 'rhw-calculator' ); ?>">&rsaquo;</button>
+										</div>
+
+										<div class="rhw-pub-cal-weekdays">
+											<div><?php esc_html_e( 'Sun', 'rhw-calculator' ); ?></div>
+											<div><?php esc_html_e( 'Mon', 'rhw-calculator' ); ?></div>
+											<div><?php esc_html_e( 'Tue', 'rhw-calculator' ); ?></div>
+											<div><?php esc_html_e( 'Wed', 'rhw-calculator' ); ?></div>
+											<div><?php esc_html_e( 'Thu', 'rhw-calculator' ); ?></div>
+											<div><?php esc_html_e( 'Fri', 'rhw-calculator' ); ?></div>
+											<div><?php esc_html_e( 'Sat', 'rhw-calculator' ); ?></div>
+										</div>
+
+										<div class="rhw-pub-cal-grid" id="rhw-public-cal-grid">
+											<div class="rhw-cal-grid-loading"><?php esc_html_e( 'Loading calendar...', 'rhw-calculator' ); ?></div>
+										</div>
+
+										<div class="rhw-pub-cal-legend">
+											<span><i class="rhw-dot-avail"></i> <?php esc_html_e( 'Available', 'rhw-calculator' ); ?></span>
+											<span><i class="rhw-dot-selected"></i> <?php esc_html_e( 'Selected', 'rhw-calculator' ); ?></span>
+											<span><i class="rhw-dot-unavail"></i> <?php esc_html_e( 'Unavailable', 'rhw-calculator' ); ?></span>
+										</div>
 									</div>
-									<div>
-										<label class="rhw-field-label">
-											<?php esc_html_e( 'Available Time Slots (Live Calendar Sync)', 'rhw-calculator' ); ?>
-										</label>
+
+									<!-- Right: Available Time Slots for Selected Date -->
+									<div class="rhw-pub-cal-times-box">
+										<div class="rhw-pub-times-header">
+											<span class="dashicons dashicons-clock"></span>
+											<span id="rhw-selected-date-heading"><?php esc_html_e( 'Select a date on the calendar', 'rhw-calculator' ); ?></span>
+										</div>
+
 										<div class="rhw-slots-container" id="rhw-slots-container">
-											<div class="rhw-slots-loading" style="padding: 8px 0; font-size: 12px; color: #666;">
-												<span class="dashicons dashicons-update rhw-spin"></span> <?php esc_html_e( 'Checking live team calendar...', 'rhw-calculator' ); ?>
+											<div class="rhw-slots-loading">
+												<span class="dashicons dashicons-update rhw-spin"></span> <?php esc_html_e( 'Checking live availability...', 'rhw-calculator' ); ?>
 											</div>
 										</div>
-										<input type="hidden" name="consultation_time" id="rhw_consultation_time" value="">
+
+										<input type="hidden" id="rhw_consultation_date" name="consultation_date" value="">
+										<input type="hidden" id="rhw_consultation_time" name="consultation_time" value="">
+										<div class="rhw-cal-error-msg" role="alert" style="display:none;"></div>
 									</div>
 								</div>
 
-								<div class="rhw-selected-slot-preview" style="display: none; margin-top: 14px; padding: 10px 14px; background: #FFFDF9; border: 1px solid #D6B98D; border-radius: 6px; font-size: 13px; color: #8A5D19;">
-									<span class="dashicons dashicons-clock" style="vertical-align: middle; margin-right: 4px;"></span>
-									<strong><?php esc_html_e( 'Selected Consultation Slot:', 'rhw-calculator' ); ?></strong>
+								<div class="rhw-selected-slot-preview" style="display: none;">
+									<span class="dashicons dashicons-yes-alt"></span>
+									<strong><?php esc_html_e( 'Selected Consultation:', 'rhw-calculator' ); ?></strong>
 									<span class="rhw-selected-slot-text"></span>
-									<span style="font-size: 11px; margin-left: 8px; color: #555;"><?php esc_html_e( '(A Google Calendar invitation link will be provided upon submitting)', 'rhw-calculator' ); ?></span>
+									<span class="rhw-selected-slot-note"><?php esc_html_e( '(Automatically synced with Google Calendar upon submitting)', 'rhw-calculator' ); ?></span>
 								</div>
 							</div>
 						<?php endif; ?>
@@ -516,6 +552,10 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 						<div class="rhw-success-sum-row rhw-success-consultation-row" style="display:none;">
 							<span><?php esc_html_e( 'Consultation Appointment:', 'rhw-calculator' ); ?></span>
 							<strong class="rhw-lead-consultation-text"></strong>
+						</div>
+						<div class="rhw-success-sum-row rhw-success-meet-row" style="display:none;">
+							<span><?php esc_html_e( 'Google Meet Video Link:', 'rhw-calculator' ); ?></span>
+							<strong><a href="#" target="_blank" rel="noopener noreferrer" class="rhw-lead-meet-link" style="color:#0f9d58;">Join Video Meeting</a></strong>
 						</div>
 					</div>
 

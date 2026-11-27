@@ -163,8 +163,11 @@ class RHW_Email {
 								<td class="label" style="color: #7B112D; font-weight: bold;">Booked Consultation:</td>
 								<td>
 									<strong style="color: #7B112D;"><?php echo esc_html( date( 'l, M j, Y', strtotime( $submission['consultation_date'] ) ) . ' at ' . $submission['consultation_time'] ); ?></strong>
+									<?php if ( ! empty( $submission['google_meet_link'] ) ) : ?>
+										<br><a href="<?php echo esc_url( $submission['google_meet_link'] ); ?>" target="_blank" style="display:inline-block; margin-top:4px; font-size:12px; color:#0f9d58; font-weight:600;">Join Google Meet Video Call</a>
+									<?php endif; ?>
 									<?php if ( ! empty( $submission['gcal_link'] ) ) : ?>
-										<br><a href="<?php echo esc_url( $submission['gcal_link'] ); ?>" target="_blank" style="display:inline-block; margin-top:4px; font-size:12px; color:#4285F4; font-weight:600;">+ Add to Team Google Calendar</a>
+										<br><a href="<?php echo esc_url( $submission['gcal_link'] ); ?>" target="_blank" style="display:inline-block; margin-top:4px; font-size:12px; color:#4285F4; font-weight:600;">Open / Add in Google Calendar</a>
 									<?php endif; ?>
 								</td>
 							</tr>
@@ -311,10 +314,13 @@ class RHW_Email {
 							<p style="margin: 0 0 10px 0; font-size: 14px;">
 								<strong>Date & Time:</strong> <?php echo esc_html( date( 'l, F j, Y', strtotime( $submission['consultation_date'] ) ) . ' at ' . $submission['consultation_time'] ); ?><br>
 								<strong>Meeting Format:</strong> Phone or Google Meet with our Wedding Specialist
+								<?php if ( ! empty( $submission['google_meet_link'] ) ) : ?>
+									<br><strong>Google Meet Link:</strong> <a href="<?php echo esc_url( $submission['google_meet_link'] ); ?>" target="_blank" style="color: #0f9d58; font-weight: bold;"><?php echo esc_html( $submission['google_meet_link'] ); ?></a>
+								<?php endif; ?>
 							</p>
 							<?php if ( ! empty( $submission['gcal_link'] ) ) : ?>
 								<a href="<?php echo esc_url( $submission['gcal_link'] ); ?>" target="_blank" style="display: inline-block; background: #4285F4; color: #ffffff !important; text-decoration: none; padding: 10px 18px; border-radius: 4px; font-weight: bold; font-size: 13px;">
-									+ Add Appointment to Google Calendar
+									+ View / Add in Google Calendar
 								</a>
 							<?php endif; ?>
 						</div>

@@ -148,9 +148,15 @@ class RHW_Activator {
 	}
 
 	/**
-	 * Ensure wp_rhw_bookings table exists (Item 9)
+	 * Ensure wp_rhw_bookings table exists and is up to date.
 	 */
-	public static function ensure_bookings_table_exists() {
+	public static function ensure_bookings_table_exists( $force = false ) {
+		static $checked = false;
+		if ( $checked && ! $force ) {
+			return;
+		}
+		$checked = true;
+
 		global $wpdb;
 
 		$charset_collate = $wpdb->get_charset_collate();
@@ -168,6 +174,8 @@ class RHW_Activator {
 			booking_type varchar(50) NOT NULL DEFAULT 'consultation',
 			notes text DEFAULT NULL,
 			status varchar(50) NOT NULL DEFAULT 'confirmed',
+			google_event_id varchar(255) DEFAULT NULL,
+			google_meet_link varchar(500) DEFAULT NULL,
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
 			KEY booking_date (booking_date),
@@ -175,5 +183,64 @@ class RHW_Activator {
 			KEY status (status)
 		) {$charset_collate};";
 		dbDelta( $sql_bookings );
+	}
+
+	/**
+	 * Automatic plugin upgrade routine when plugin version advances without reactivation.
+	 */
+	public static function maybe_upgrade() {
+		$installed_ver = get_option( 'rhw_calculator_version', '1.0.0' );
+		if ( version_compare( $installed_ver, RHW_CALCULATOR_VERSION, '>=' ) ) {
+			return;
+		}
+
+		// Ensure bookings table has new Google Calendar sync columns
+		self::ensure_bookings_table_exists( true );
+
+		// Upgrade existing saved forms to v2.3.0 Section 5 attraction_guests rule (if previously pointing to include_attractions)
+		if ( version_compare( $installed_ver, '2.3.0', '<' ) ) {
+			global $wpdb;
+			$forms_table = $wpdb->prefix . 'rhw_forms';
+			if ( $wpdb->get_var( "SHOW TABLES LIKE '{$forms_table}'" ) === $forms_table ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$forms = $wpdb->get_results( "SELECT id, questions FROM {$forms_table}" );
+				if ( $forms ) {
+					foreach ( $forms as $f ) {
+						$qs = json_decode( $f->questions, true );
+						if ( is_array( $qs ) ) {
+							$changed = false;
+							foreach ( $qs as &$q_item ) {
+								if ( isset( $q_item['id'] ) && 'attraction_guests' === $q_item['id'] ) {
+									if ( ! isset( $q_item['conditional'] ) || ( isset( $q_item['conditional']['field'] ) && 'include_attractions' === $q_item['conditional']['field'] ) ) {
+										$q_item['conditional'] = array(
+											'enabled'  => true,
+											'field'    => 'attraction_selection',
+											'operator' => 'not_empty',
+											'value'    => '',
+										);
+										$q_item['max']           = 1000;
+										$q_item['default_value'] = 75;
+										$q_item['help_text']     = 'Specify how many persons will be taking the tour or golfing (defaults to your Section 1 guest count or less; pricing updates per person).';
+										$changed                 = true;
+									}
+								}
+							}
+							if ( $changed ) {
+								// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+								$wpdb->update(
+									$forms_table,
+									array( 'questions' => wp_json_encode( $qs ) ),
+									array( 'id' => $f->id ),
+									array( '%s' ),
+									array( '%d' )
+								);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		update_option( 'rhw_calculator_version', RHW_CALCULATOR_VERSION );
 	}
 }

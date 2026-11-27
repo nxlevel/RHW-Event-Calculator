@@ -409,3 +409,211 @@ hr.wp-header-end {
 .rhw-modal-body {
 	padding: 24px;
 }
+
+/* Admin Calendar Grid & Day Inspector (v2.3.0) */
+.rhw-admin-cal-layout {
+	display: grid;
+	grid-template-columns: 1.55fr 1fr;
+	gap: 24px;
+	align-items: start;
+}
+
+@media (max-width: 1100px) {
+	.rhw-admin-cal-layout {
+		grid-template-columns: 1fr;
+	}
+}
+
+.rhw-admin-cal-toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+}
+
+.rhw-admin-cal-month-title {
+	font-size: 18px;
+	font-weight: 700;
+	color: #7B112D;
+	margin: 0;
+}
+
+.rhw-admin-cal-weekdays {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 6px;
+	margin-bottom: 6px;
+}
+
+.rhw-admin-cal-weekdays div {
+	text-align: center;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: #64748b;
+	padding: 6px 0;
+}
+
+.rhw-admin-cal-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 6px;
+}
+
+.rhw-admin-day-square {
+	min-height: 82px;
+	border: 1px solid #e2e8f0;
+	border-radius: 6px;
+	padding: 6px;
+	background: #ffffff;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	box-sizing: border-box;
+	text-align: left;
+}
+
+.rhw-admin-day-square:hover {
+	border-color: #C5A059;
+	background: #fdfbf7;
+}
+
+.rhw-admin-day-square.is-empty {
+	background: #f8fafc;
+	border-color: transparent;
+	cursor: default;
+}
+
+.rhw-admin-day-square.is-closed {
+	background: #f1f5f9;
+	color: #94a3b8;
+}
+
+.rhw-admin-day-square.is-blocked {
+	background: #fef2f2;
+	border-color: #fecaca;
+}
+
+.rhw-admin-day-square.is-selected {
+	border: 2px solid #7B112D !important;
+	background: #fffafa;
+	box-shadow: 0 2px 8px rgba(123, 17, 45, 0.15);
+}
+
+.rhw-admin-day-square.is-today .rhw-day-num {
+	background: #C5A059;
+	color: #ffffff;
+	border-radius: 50%;
+	width: 22px;
+	height: 22px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.rhw-day-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 13px;
+	font-weight: 700;
+	color: #1e293b;
+}
+
+.rhw-day-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	margin-top: 4px;
+}
+
+.rhw-day-pill {
+	font-size: 10px;
+	font-weight: 600;
+	padding: 2px 5px;
+	border-radius: 3px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.rhw-day-pill-avail { background: #ecfdf5; color: #065f46; }
+.rhw-day-pill-booked { background: #7B112D; color: #ffffff; }
+.rhw-day-pill-blocked { background: #fee2e2; color: #991b1b; }
+.rhw-day-pill-closed { background: #e2e8f0; color: #64748b; }
+
+.rhw-slot-manage-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 14px;
+}
+
+.rhw-slot-manage-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border: 1px solid #e2e8f0;
+	border-radius: 6px;
+	background: #ffffff;
+}
+
+.rhw-slot-manage-row.status-booked {
+	border-left: 4px solid #7B112D;
+	background: #fff9fa;
+}
+
+.rhw-slot-manage-row.status-blocked_admin {
+	border-left: 4px solid #dc2626;
+	background: #fef2f2;
+}
+
+.rhw-slot-manage-row.status-google_busy {
+	border-left: 4px solid #2563eb;
+	background: #eff6ff;
+}
+
+.rhw-schedule-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-top: 10px;
+}
+
+.rhw-schedule-table th,
+.rhw-schedule-table td {
+	padding: 10px 12px;
+	border-bottom: 1px solid #e2e8f0;
+	text-align: left;
+}
+
+.rhw-schedule-table th {
+	background: #f8fafc;
+	font-size: 12px;
+	text-transform: uppercase;
+	color: #475569;
+}
+
+.rhw-gcal-status-banner {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 16px 20px;
+	border-radius: 8px;
+	margin-bottom: 20px;
+}
+
+.rhw-gcal-status-banner.connected {
+	background: #ecfdf5;
+	border: 1px solid #a7f3d0;
+	color: #065f46;
+}
+
+.rhw-gcal-status-banner.disconnected {
+	background: #fffbeb;
+	border: 1px solid #fde68a;
+	color: #92400e;
+}

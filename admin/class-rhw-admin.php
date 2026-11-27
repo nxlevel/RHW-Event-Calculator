@@ -16,6 +16,7 @@ class RHW_Admin {
 	 */
 	public function init() {
 		add_action( 'admin_menu', array( $this, 'register_admin_menus' ) );
+		add_action( 'admin_init', array( $this, 'handle_gcal_oauth_callback' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 		add_action( 'admin_post_rhw_save_form', array( $this, 'handle_save_form' ) );
 		add_action( 'admin_post_rhw_delete_form', array( $this, 'handle_delete_form' ) );
@@ -25,6 +26,14 @@ class RHW_Admin {
 		add_action( 'admin_post_rhw_delete_submission', array( $this, 'handle_delete_submission' ) );
 		add_action( 'admin_post_rhw_block_slot', array( $this, 'handle_block_slot' ) );
 		add_action( 'admin_post_rhw_delete_booking', array( $this, 'handle_delete_booking' ) );
+		add_action( 'admin_post_rhw_save_calendar_schedule', array( $this, 'handle_save_calendar_schedule' ) );
+		add_action( 'admin_post_rhw_save_gcal_settings', array( $this, 'handle_save_gcal_settings' ) );
+		add_action( 'admin_post_rhw_disconnect_gcal', array( $this, 'handle_disconnect_gcal' ) );
+
+		// Admin Calendar interactive AJAX
+		add_action( 'wp_ajax_rhw_admin_get_month_data', array( $this, 'ajax_admin_get_month_data' ) );
+		add_action( 'wp_ajax_rhw_admin_get_day_slots', array( $this, 'ajax_admin_get_day_slots' ) );
+		add_action( 'wp_ajax_rhw_admin_toggle_block', array( $this, 'ajax_admin_toggle_block' ) );
 	}
 
 	/**
@@ -341,7 +350,40 @@ class RHW_Admin {
 	}
 
 	/**
-	 * Render Consultations Calendar page (Item 9)
+	 * Intercept Google OAuth2 callback on Calendar page before headers are sent.
+	 */
+	public function handle_gcal_oauth_callback() {
+		if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		if ( empty( $_GET['page'] ) || 'rhw-calculator-calendar' !== $_GET['page'] ) {
+			return;
+		}
+		if ( empty( $_GET['rhw_gcal_action'] ) || 'oauth_callback' !== $_GET['rhw_gcal_action'] ) {
+			return;
+		}
+
+		if ( ! empty( $_GET['error'] ) ) {
+			$err_msg = sanitize_text_field( wp_unslash( $_GET['error'] ) );
+			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_error=' . rawurlencode( $err_msg ) ) );
+			exit;
+		}
+
+		$code  = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
+		$state = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
+
+		$res = RHW_Google_Calendar::handle_oauth_callback( $code, $state );
+		if ( is_wp_error( $res ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_error=' . rawurlencode( $res->get_error_message() ) ) );
+			exit;
+		}
+
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_connected=1' ) );
+		exit;
+	}
+
+	/**
+	 * Render Consultations Calendar page.
 	 */
 	public function render_calendar_page() {
 		RHW_Activator::ensure_bookings_table_exists();
@@ -367,34 +409,14 @@ class RHW_Admin {
 			exit;
 		}
 
-		global $wpdb;
-		RHW_Activator::ensure_bookings_table_exists();
-		$bookings_table = $wpdb->prefix . 'rhw_bookings';
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$wpdb->insert(
-			$bookings_table,
-			array(
-				'submission_id'  => null,
-				'customer_name'  => 'Admin Blocked Slot',
-				'customer_email' => get_option( 'admin_email' ),
-				'customer_phone' => '',
-				'booking_date'   => $date,
-				'booking_time'   => $time,
-				'booking_type'   => 'blocked_admin',
-				'notes'          => $notes,
-				'status'         => 'blocked',
-				'created_at'     => current_time( 'mysql' ),
-			),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
-		);
+		RHW_Calendar_Manager::block_slot( $date, $time, $notes );
 
 		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&blocked=1' ) );
 		exit;
 	}
 
 	/**
-	 * Handle admin deleting/unblocking a booking.
+	 * Handle admin deleting/unblocking a booking (and synced Google Calendar event).
 	 */
 	public function handle_delete_booking() {
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -404,12 +426,134 @@ class RHW_Admin {
 		$id = isset( $_GET['id'] ) ? intval( $_GET['id'] ) : 0;
 		check_admin_referer( 'rhw_delete_booking_' . $id );
 
-		global $wpdb;
-		$bookings_table = $wpdb->prefix . 'rhw_bookings';
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$wpdb->delete( $bookings_table, array( 'id' => $id ), array( '%d' ) );
+		RHW_Calendar_Manager::delete_booking( $id );
 
 		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&unblocked=1' ) );
 		exit;
+	}
+
+	/**
+	 * Save Weekly Schedule & Time Interval settings.
+	 */
+	public function handle_save_calendar_schedule() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized request.', 'rhw-calculator' ) );
+		}
+
+		check_admin_referer( 'rhw_save_calendar_schedule' );
+
+		RHW_Calendar_Manager::save_settings( $_POST );
+
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=schedule&schedule_saved=1' ) );
+		exit;
+	}
+
+	/**
+	 * Save Google Calendar Account Sync settings (and optionally trigger OAuth flow).
+	 */
+	public function handle_save_gcal_settings() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized request.', 'rhw-calculator' ) );
+		}
+
+		check_admin_referer( 'rhw_save_gcal_settings' );
+
+		RHW_Google_Calendar::save_settings( $_POST );
+
+		if ( ! empty( $_POST['connect_google_oauth'] ) ) {
+			$auth_url = RHW_Google_Calendar::get_oauth_authorize_url();
+			if ( ! empty( $auth_url ) ) {
+				// phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect
+				wp_redirect( $auth_url );
+				exit;
+			}
+			wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_error=' . rawurlencode( __( 'Please enter your Google Client ID and Client Secret before connecting.', 'rhw-calculator' ) ) ) );
+			exit;
+		}
+
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_saved=1' ) );
+		exit;
+	}
+
+	/**
+	 * Disconnect Google OAuth account.
+	 */
+	public function handle_disconnect_gcal() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized request.', 'rhw-calculator' ) );
+		}
+
+		check_admin_referer( 'rhw_disconnect_gcal' );
+		RHW_Google_Calendar::disconnect();
+
+		wp_safe_redirect( admin_url( 'admin.php?page=rhw-calculator-calendar&tab=google_sync&gcal_disconnected=1' ) );
+		exit;
+	}
+
+	/**
+	 * AJAX: Return Admin Month Grid overview data.
+	 */
+	public function ajax_admin_get_month_data() {
+		check_ajax_referer( 'rhw_admin_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'Unauthorized' ) );
+		}
+
+		$year  = isset( $_GET['year'] ) ? intval( $_GET['year'] ) : (int) date( 'Y' );
+		$month = isset( $_GET['month'] ) ? intval( $_GET['month'] ) : (int) date( 'n' );
+
+		$data = RHW_Calendar_Manager::get_month_availability( $year, $month, true );
+		wp_send_json_success( $data );
+	}
+
+	/**
+	 * AJAX: Return Admin Day Inspector slots.
+	 */
+	public function ajax_admin_get_day_slots() {
+		check_ajax_referer( 'rhw_admin_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'Unauthorized' ) );
+		}
+
+		$date = isset( $_GET['date'] ) ? sanitize_text_field( wp_unslash( $_GET['date'] ) ) : '';
+		$data = RHW_Calendar_Manager::get_day_slots( $date, true );
+		wp_send_json_success( $data );
+	}
+
+	/**
+	 * AJAX: Toggle block/unblock for a specific slot or entire day directly from the Admin Calendar.
+	 */
+	public function ajax_admin_toggle_block() {
+		check_ajax_referer( 'rhw_admin_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'Unauthorized' ) );
+		}
+
+		$op         = isset( $_POST['op'] ) ? sanitize_text_field( wp_unslash( $_POST['op'] ) ) : '';
+		$date       = isset( $_POST['date'] ) ? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
+		$time       = isset( $_POST['time'] ) ? sanitize_text_field( wp_unslash( $_POST['time'] ) ) : '';
+		$booking_id = isset( $_POST['booking_id'] ) ? intval( $_POST['booking_id'] ) : 0;
+		$notes      = isset( $_POST['notes'] ) ? sanitize_text_field( wp_unslash( $_POST['notes'] ) ) : 'Blocked by Admin';
+
+		if ( 'unblock' === $op && $booking_id > 0 ) {
+			RHW_Calendar_Manager::delete_booking( $booking_id );
+		} elseif ( 'block_slot' === $op && ! empty( $date ) && ! empty( $time ) ) {
+			RHW_Calendar_Manager::block_slot( $date, $time, $notes );
+		} elseif ( 'block_day' === $op && ! empty( $date ) ) {
+			RHW_Calendar_Manager::block_slot( $date, 'all_day', $notes );
+		} else {
+			wp_send_json_error( array( 'message' => 'Invalid action or parameters.' ) );
+		}
+
+		$day_data = RHW_Calendar_Manager::get_day_slots( $date, true );
+		$ts       = strtotime( $date );
+		$month    = RHW_Calendar_Manager::get_month_availability( (int) date( 'Y', $ts ), (int) date( 'n', $ts ), true );
+
+		wp_send_json_success(
+			array(
+				'day'   => $day_data,
+				'month' => $month,
+			)
+		);
 	}
 }
