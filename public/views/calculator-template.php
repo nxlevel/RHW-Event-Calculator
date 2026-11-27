@@ -82,7 +82,7 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 		<?php $header_image_url = get_option( 'rhw_header_image_url', '' ); ?>
 		<?php if ( ! empty( $header_image_url ) ) : ?>
 			<div class="rhw-calc-header-image-wrap">
-				<img src="<?php echo esc_url( $header_image_url ); ?>" alt="<?php echo esc_attr( $form['title'] ); ?>" class="rhw-calc-header-image" width="270" height="270">
+				<img src="<?php echo esc_url( $header_image_url ); ?>" alt="<?php echo esc_attr( $form['title'] ); ?>" class="rhw-calc-header-image" width="130" height="130">
 			</div>
 		<?php endif; ?>
 		<h2 class="rhw-calc-title"><?php echo esc_html( $form['title'] ); ?></h2>
@@ -497,7 +497,6 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 									<span class="dashicons dashicons-yes-alt"></span>
 									<strong><?php esc_html_e( 'Selected Consultation:', 'rhw-calculator' ); ?></strong>
 									<span class="rhw-selected-slot-text"></span>
-									<span class="rhw-selected-slot-note"><?php esc_html_e( '(Automatically synced with Google Calendar upon submitting)', 'rhw-calculator' ); ?></span>
 								</div>
 							</div>
 						<?php endif; ?>
@@ -538,7 +537,7 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 					<h3 class="rhw-success-heading"><?php esc_html_e( 'Your Consultation Request was Sent!', 'rhw-calculator' ); ?></h3>
 					<p class="rhw-success-lead">
 						<?php esc_html_e( 'Thank you, ', 'rhw-calculator' ); ?><strong class="rhw-lead-name-text"></strong>!
-						<?php esc_html_e( 'A preliminary quote has been generated and dispatched to your email.', 'rhw-calculator' ); ?>
+						<?php esc_html_e( 'A preliminary quote has been generated and sent to your email.', 'rhw-calculator' ); ?>
 					</p>
 
 					<div class="rhw-success-summary-box">
@@ -572,7 +571,7 @@ if ( ! function_exists( 'rhw_format_clickable_text' ) ) {
 
 					<div class="rhw-next-steps-box">
 						<h4><?php esc_html_e( 'What Happens Next?', 'rhw-calculator' ); ?></h4>
-						<p><?php esc_html_e( 'Our Destination Relationship Specialists will review your vision and preliminary estimate. Within 3 to 5 business days, you will receive a consultation invite and formal proposal.', 'rhw-calculator' ); ?></p>
+						<p><?php esc_html_e( 'Our Destination Relationship Specialists will review your vision and preliminary estimate. We look forward to your scheduled consultation to discuss your vision and generate a formal proposal.', 'rhw-calculator' ); ?></p>
 					</div>
 				</div>
 			</div>

@@ -955,4 +955,109 @@ class RHW_Form_Manager {
 			'OTHER' => 'Other / International',
 		);
 	}
+
+	/**
+	 * Build lookup map of form questions keyed by question ID.
+	 */
+	public static function get_questions_map( $form ) {
+		$form_questions = ( ! empty( $form['questions'] ) && is_array( $form['questions'] ) ) ? $form['questions'] : array();
+		$questions_map  = array();
+		foreach ( $form_questions as $fq ) {
+			if ( ! empty( $fq['id'] ) ) {
+				$questions_map[ $fq['id'] ] = $fq;
+			}
+		}
+		return $questions_map;
+	}
+
+	/**
+	 * Resolve a stored option value to its human-readable choice label.
+	 */
+	public static function resolve_choice_label( $form, $question_id, $raw_value ) {
+		if ( '' === $raw_value || null === $raw_value ) {
+			return '';
+		}
+		$questions_map = self::get_questions_map( $form );
+		if ( isset( $questions_map[ $question_id ]['options'] ) && is_array( $questions_map[ $question_id ]['options'] ) ) {
+			foreach ( $questions_map[ $question_id ]['options'] as $opt ) {
+				if ( isset( $opt['value'] ) && (string) $opt['value'] === (string) $raw_value && ! empty( $opt['label'] ) ) {
+					return $opt['label'];
+				}
+			}
+		}
+		return ucwords( str_replace( '_', ' ', (string) $raw_value ) );
+	}
+
+	/**
+	 * Format submitted questionnaire responses using actual Question Labels and Choice Labels.
+	 *
+	 * Shared across the Submission Detail view, emails, and generated PDF attachments.
+	 */
+	public static function format_questionnaire_responses( $form, $answers ) {
+		if ( ! is_array( $answers ) ) {
+			return array();
+		}
+
+		$questions_map = self::get_questions_map( $form );
+		$formatted     = array();
+
+		foreach ( $answers as $key => $val ) {
+			$matched_q = isset( $questions_map[ $key ] ) ? $questions_map[ $key ] : null;
+			$suffix    = '';
+
+			if ( ! $matched_q && '_date' === substr( (string) $key, -5 ) ) {
+				$base_key  = substr( (string) $key, 0, -5 );
+				$matched_q = isset( $questions_map[ $base_key ] ) ? $questions_map[ $base_key ] : null;
+				$suffix    = ' (' . __( 'Date', 'rhw-calculator' ) . ')';
+			} elseif ( ! $matched_q && '_time' === substr( (string) $key, -5 ) ) {
+				$base_key  = substr( (string) $key, 0, -5 );
+				$matched_q = isset( $questions_map[ $base_key ] ) ? $questions_map[ $base_key ] : null;
+				$suffix    = ' (' . __( 'Time', 'rhw-calculator' ) . ')';
+			}
+
+			if ( $matched_q && ! empty( $matched_q['label'] ) ) {
+				$display_label = $matched_q['label'] . $suffix;
+			} else {
+				$display_label = ucwords( str_replace( '_', ' ', (string) $key ) );
+			}
+
+			$opt_map = array();
+			if ( $matched_q && ! empty( $matched_q['options'] ) && is_array( $matched_q['options'] ) ) {
+				foreach ( $matched_q['options'] as $opt ) {
+					if ( isset( $opt['value'] ) && '' !== $opt['value'] && ! empty( $opt['label'] ) ) {
+						$opt_map[ (string) $opt['value'] ] = $opt['label'];
+					}
+				}
+			}
+
+			$is_url   = is_string( $val ) && false !== filter_var( $val, FILTER_VALIDATE_URL );
+			$is_image = $is_url && 1 === preg_match( '/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i', $val );
+			$is_file  = ( $matched_q && isset( $matched_q['type'] ) && 'file' === $matched_q['type'] && ! empty( $val ) )
+				|| ( $is_url && 1 === preg_match( '/\.(jpg|jpeg|png|webp|gif|pdf)(\?.*)?$/i', $val ) );
+
+			if ( is_array( $val ) ) {
+				$mapped_vals   = array_map(
+					function( $v ) use ( $opt_map ) {
+						return isset( $opt_map[ (string) $v ] ) ? $opt_map[ (string) $v ] : $v;
+					},
+					$val
+				);
+				$display_value = implode( ', ', $mapped_vals );
+			} else {
+				$display_value = isset( $opt_map[ (string) $val ] ) ? $opt_map[ (string) $val ] : (string) $val;
+			}
+
+			$formatted[] = array(
+				'key'           => $key,
+				'label'         => $display_label,
+				'raw_value'     => $val,
+				'display_value' => $display_value,
+				'is_url'        => $is_url,
+				'is_image'      => $is_image,
+				'is_file'       => $is_file,
+			);
+		}
+
+		return $formatted;
+	}
 }

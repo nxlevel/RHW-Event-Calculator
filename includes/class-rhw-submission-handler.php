@@ -14,6 +14,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class RHW_Submission_Handler {
 
+	/** @var array Local filesystem paths of uploaded files keyed by sanitized question ID. */
+	private $uploaded_file_paths = array();
+
 	/**
 	 * Register AJAX hooks.
 	 */
@@ -336,7 +339,9 @@ class RHW_Submission_Handler {
 		}
 
 		// 9. Send Notification Emails
-		RHW_Email::send_admin_notification( $submission_id, $submission_data, $form, $calc );
+		$admin_email_data                        = $submission_data;
+		$admin_email_data['uploaded_file_paths'] = $this->uploaded_file_paths;
+		RHW_Email::send_admin_notification( $submission_id, $admin_email_data, $form, $calc );
 		RHW_Email::send_customer_confirmation( $submission_id, $submission_data, $form, $calc );
 
 		// 10. Return Success Response
@@ -399,7 +404,11 @@ class RHW_Submission_Handler {
 			$movefile         = wp_handle_upload( $file, $upload_overrides );
 
 			if ( $movefile && empty( $movefile['error'] ) ) {
-				$uploaded[ sanitize_key( $field_key ) ] = $movefile['url'];
+				$clean_key                             = sanitize_key( $field_key );
+				$uploaded[ $clean_key ]                = $movefile['url'];
+				if ( ! empty( $movefile['file'] ) ) {
+					$this->uploaded_file_paths[ $clean_key ] = $movefile['file'];
+				}
 			}
 		}
 

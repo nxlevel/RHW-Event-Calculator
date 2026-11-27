@@ -59,8 +59,8 @@
 }
 
 .rhw-calc-header-image {
-	width: 270px;
-	height: 270px;
+	width: 130px;
+	height: 130px;
 	max-width: 100%;
 	object-fit: contain;
 	border-radius: var(--rhw-radius);
@@ -859,6 +859,19 @@
 }
 
 /* Submission Success Card */
+.rhw-calc-wrapper.rhw-submitted .rhw-calc-grid {
+	display: block;
+}
+
+.rhw-calc-wrapper.rhw-submitted .rhw-calc-main {
+	width: 100%;
+}
+
+.rhw-calc-wrapper.rhw-submitted .rhw-submission-success-view {
+	max-width: 760px;
+	margin: 0 auto;
+}
+
 .rhw-submission-success-view {
 	background: #ffffff;
 	border: 1px solid var(--rhw-border);

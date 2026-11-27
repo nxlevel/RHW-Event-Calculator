@@ -3,7 +3,7 @@
  * Plugin Name:       Rose Hall Weddings - Event Cost Calculator & Lead Capture
  * Plugin URI:        https://rosehall.com/weddings
  * Description:       Interactive real-time event cost calculator and lead capture system for Rose Hall Weddings & Events.
- * Version:           2.4.0
+ * Version:           2.5.0
  * Author:            Rose Hall Developments Ltd.
  * Author URI:        https://rosehall.com
  * Text Domain:       rhw-calculator
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants.
-define( 'RHW_CALCULATOR_VERSION', '2.4.0' );
+define( 'RHW_CALCULATOR_VERSION', '2.5.0' );
 define( 'RHW_CALCULATOR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'RHW_CALCULATOR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'RHW_CALCULATOR_BASENAME', plugin_basename( __FILE__ ) );
@@ -34,6 +34,7 @@ require_once RHW_CALCULATOR_PLUGIN_DIR . 'includes/class-rhw-pricing-engine.php'
 require_once RHW_CALCULATOR_PLUGIN_DIR . 'includes/class-rhw-form-manager.php';
 require_once RHW_CALCULATOR_PLUGIN_DIR . 'includes/class-rhw-google-calendar.php';
 require_once RHW_CALCULATOR_PLUGIN_DIR . 'includes/class-rhw-calendar-manager.php';
+require_once RHW_CALCULATOR_PLUGIN_DIR . 'includes/class-rhw-pdf-generator.php';
 require_once RHW_CALCULATOR_PLUGIN_DIR . 'includes/class-rhw-email.php';
 require_once RHW_CALCULATOR_PLUGIN_DIR . 'includes/class-rhw-submission-handler.php';
 require_once RHW_CALCULATOR_PLUGIN_DIR . 'includes/class-rhw-exporter.php';

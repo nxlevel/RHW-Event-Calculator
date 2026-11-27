@@ -1303,6 +1303,7 @@
 		 * Display confirmation receipt upon successful submission
 		 */
 		function showSuccessState(data) {
+			$wrapper.addClass('rhw-submitted');
 			$wrapper.find('.rhw-calculator-form').hide();
 			$wrapper.find('.rhw-wizard-nav').hide();
 			$wrapper.find('.rhw-calc-sidebar').hide();

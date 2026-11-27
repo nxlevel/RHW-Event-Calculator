@@ -94,15 +94,15 @@ $redirect_uri      = RHW_Google_Calendar::get_redirect_uri();
 					</tr>
 
 					<tr>
-						<th scope="row"><label for="rhw_header_image_url"><?php esc_html_e( 'Calculator Header Image URL (270px × 270px)', 'rhw-calculator' ); ?></label></th>
+						<th scope="row"><label for="rhw_header_image_url"><?php esc_html_e( 'Calculator Header Image URL (130px × 130px)', 'rhw-calculator' ); ?></label></th>
 						<td>
 							<div style="display: flex; gap: 8px; align-items: center; max-width: 650px;">
-								<input type="url" name="rhw_header_image_url" id="rhw_header_image_url" value="<?php echo esc_attr( $header_image_url ); ?>" class="large-text" placeholder="https://yourdomain.com/wp-content/uploads/logo-270x270.png">
+								<input type="url" name="rhw_header_image_url" id="rhw_header_image_url" value="<?php echo esc_attr( $header_image_url ); ?>" class="large-text" placeholder="https://yourdomain.com/wp-content/uploads/logo-130x130.png">
 								<button type="button" class="button button-secondary" id="rhw_choose_header_image_btn"><?php esc_html_e( 'Media Library', 'rhw-calculator' ); ?></button>
 							</div>
-							<p class="description"><?php esc_html_e( 'Displays a 270px × 270px centered image above the calculator title (replaces the badge bubble).', 'rhw-calculator' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Displays a 130px × 130px centered image above the calculator title and email headers.', 'rhw-calculator' ); ?></p>
 							<div id="rhw_header_image_preview_wrap" style="margin-top: 10px; <?php echo empty( $header_image_url ) ? 'display:none;' : ''; ?>">
-								<img id="rhw_header_image_preview" src="<?php echo esc_url( $header_image_url ); ?>" alt="" style="width: 135px; height: 135px; object-fit: contain; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; padding: 4px;">
+								<img id="rhw_header_image_preview" src="<?php echo esc_url( $header_image_url ); ?>" alt="" style="width: 130px; height: 130px; object-fit: contain; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; padding: 4px;">
 							</div>
 						</td>
 					</tr>
@@ -465,7 +465,7 @@ jQuery(document).ready(function($) {
 		e.preventDefault();
 		if (typeof wp === 'undefined' || !wp.media) return;
 		const frame = wp.media({
-			title: 'Select Calculator Header Image (270x270)',
+			title: 'Select Calculator Header Image (130x130)',
 			button: { text: 'Use Image' },
 			multiple: false
 		});

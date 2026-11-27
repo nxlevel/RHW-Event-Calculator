@@ -52,9 +52,21 @@ class RHW_Email {
 			'Reply-To: ' . $submission_data['customer_name'] . ' <' . $submission_data['customer_email'] . '>',
 		);
 
-		$body = self::get_admin_email_html( $submission_id, $submission_data, $form, $calc );
+		$body        = self::get_admin_email_html( $submission_id, $submission_data, $form, $calc );
+		$attachments = array();
 
-		return wp_mail( $recipients, $subject, $body, $headers );
+		if ( class_exists( 'RHW_PDF_Generator' ) ) {
+			try {
+				$pdf_path = RHW_PDF_Generator::generate_submission_pdf( $submission_id, $submission_data, $form, $calc );
+				if ( $pdf_path && file_exists( $pdf_path ) ) {
+					$attachments[] = $pdf_path;
+				}
+			} catch ( Throwable $e ) {
+				// Non-fatal: still dispatch email even if PDF creation fails.
+			}
+		}
+
+		return wp_mail( $recipients, $subject, $body, $headers, $attachments );
 	}
 
 	/**
@@ -141,13 +153,19 @@ class RHW_Email {
 			</style>
 		</head>
 		<body>
+			<?php $header_image_url = get_option( 'rhw_header_image_url', '' ); ?>
 			<div class="email-wrapper">
 				<div class="email-header">
+					<?php if ( ! empty( $header_image_url ) ) : ?>
+						<div style="margin: 0 auto 14px auto; text-align: center;">
+							<img src="<?php echo esc_url( $header_image_url ); ?>" alt="Rose Hall Weddings &amp; Events" width="130" style="width: 130px; max-width: 100%; height: auto; max-height: 130px; object-fit: contain; display: block; margin: 0 auto; border: 0;">
+						</div>
+					<?php endif; ?>
 					<h1>Rose Hall Weddings & Events</h1>
 					<p>New Quote Request #<?php echo esc_html( $submission_id ); ?></p>
 				</div>
 				<div class="email-body">
-					<p>A prospective client has submitted an interactive quote request and requested a consultation:</p>
+					<p>A prospective client has submitted a quote request and booked a consultation:</p>
 
 					<div class="section-title">Client Contact Details</div>
 					<table class="lead-meta">
@@ -218,20 +236,26 @@ class RHW_Email {
 						</tbody>
 					</table>
 
-					<?php if ( ! empty( $answers['decor_image'] ) || ! empty( $answers['bouquet_image'] ) ) : ?>
+					<?php
+					$formatted_answers = RHW_Form_Manager::format_questionnaire_responses( $form, $answers );
+					$uploaded_items    = array_filter(
+						$formatted_answers,
+						function( $item ) {
+							return ! empty( $item['is_file'] ) && ! empty( $item['raw_value'] );
+						}
+					);
+					if ( ! empty( $uploaded_items ) ) :
+					?>
 						<div class="section-title">Uploaded Design Inspiration</div>
 						<div style="margin-bottom: 20px;">
-							<?php if ( ! empty( $answers['decor_image'] ) ) : ?>
-								<p><strong>Décor Inspiration:</strong> <a href="<?php echo esc_url( $answers['decor_image'] ); ?>" target="_blank" class="attachment-link">View Décor File &rarr;</a></p>
-							<?php endif; ?>
-							<?php if ( ! empty( $answers['bouquet_image'] ) ) : ?>
-								<p><strong>Bouquet Inspiration:</strong> <a href="<?php echo esc_url( $answers['bouquet_image'] ); ?>" target="_blank" class="attachment-link">View Bouquet File &rarr;</a></p>
-							<?php endif; ?>
+							<?php foreach ( $uploaded_items as $uitem ) : ?>
+								<p><strong><?php echo esc_html( $uitem['label'] ); ?>:</strong> <a href="<?php echo esc_url( $uitem['raw_value'] ); ?>" target="_blank" class="attachment-link">View File &rarr;</a></p>
+							<?php endforeach; ?>
 						</div>
 					<?php endif; ?>
 
 					<div style="text-align: center;">
-						<a href="<?php echo esc_url( $admin_url ); ?>" class="button">View Full Lead & Client Answers in WordPress</a>
+						<a href="<?php echo esc_url( $admin_url ); ?>" class="button">View Full Lead & Client Answers</a>
 					</div>
 				</div>
 				<div class="email-footer">
@@ -275,8 +299,14 @@ class RHW_Email {
 			</style>
 		</head>
 		<body>
+			<?php $header_image_url = get_option( 'rhw_header_image_url', '' ); ?>
 			<div class="email-wrapper">
 				<div class="email-header">
+					<?php if ( ! empty( $header_image_url ) ) : ?>
+						<div style="margin: 0 auto 14px auto; text-align: center;">
+							<img src="<?php echo esc_url( $header_image_url ); ?>" alt="Rose Hall Weddings &amp; Events" width="130" style="width: 130px; max-width: 100%; height: auto; max-height: 130px; object-fit: contain; display: block; margin: 0 auto; border: 0;">
+						</div>
+					<?php endif; ?>
 					<h1>Rose Hall Weddings & Events</h1>
 					<p>Your Preliminary Estimate & Next Steps</p>
 				</div>
